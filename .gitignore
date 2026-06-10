@@ -1,0 +1,12 @@
+# Real capture output — don't commit personal network data
+network-monitor*.jsonl
+network-report*.json
+*.pdf
+
+# but keep the demo sample
+!sample-monitor.jsonl
+
+# Local tooling / OS cruft
+.claude/
+.DS_Store
+Thumbs.db
