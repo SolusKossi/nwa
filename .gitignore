@@ -10,3 +10,5 @@ network-report*.json
 .claude/
 .DS_Store
 Thumbs.db
+test-report.html
+network-report*.html

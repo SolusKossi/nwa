@@ -1,30 +1,43 @@
 # nwa
 
-A small network diagnostic for Windows. You run a PowerShell probe on a PC, then drop
-the file it produces onto a single web page that analyzes it and tells you, in plain
-language, what is wrong.
+Network diagnostics for Windows. One script: run it, watch the live status in
+the terminal, press Q - it builds and opens an HTML report that explains, in
+plain language, what is wrong. Everything is analyzed locally; nothing is uploaded.
 
-Everything is analyzed in your browser. Nothing is uploaded.
+## Use
 
-## How to use it
+    irm https://raw.githubusercontent.com/SolusKossi/nwa/main/nwa.ps1 -OutFile nwa.ps1
+    powershell -ep bypass -f .\nwa.ps1
 
-1. Open `index.html` in a browser.
-2. Pick a mode:
-   - **Snapshot**: a one-shot health check (about 15 seconds).
-   - **Monitor**: keeps checking until you press Ctrl+C. Use this for intermittent
-     problems (dropouts, jitter, Wi-Fi roaming, slow DNS).
-3. Download the script, run it in PowerShell, and stop it when you are done. It writes
-   a report and opens it for you.
+Options:
 
-To try it without running anything, drag `sample-monitor.jsonl` onto the page.
+    -Snapshot            one-shot health check (~15 s) instead of monitoring
+    -Sites "a.com,b.no"  also test reachability to your own sites
+    -IntervalSec 10      seconds between checks
+    -DurationHours 8     auto-stop (default: run until Q)
+    -Report              generate the report without asking (scripted runs)
+
+The raw log (network-monitor.jsonl, on the Desktop) is written continuously,
+so nothing is lost if the machine dies. You can also drop a log onto
+index.html to analyze it in any browser - try it with sample-monitor.jsonl.
+
+## What it measures
+
+Every 10 s: ping bursts to the gateway and internet (loss, latency, jitter),
+DNS, Wi-Fi signal / band / access point / roaming, Ethernet link speed, and
+your optional sites. Periodically: channel congestion (nearby APs). On failure:
+a quick path trace. Plus Windows' own Wi-Fi disconnect log (the reason for
+each drop), adapter driver / power management, IPv6, and sleep-gap detection
+so hours where the laptop was asleep are not counted as "all fine".
 
 ## Notes
 
-- Analyzing works in any browser. Collecting the data needs Windows + PowerShell
-  (no admin required).
-- Files: `index.html` (the app), `collect.ps1` and `monitor.ps1` (the probes),
-  `sample-monitor.jsonl` (demo data).
+- No admin needed. Windows PowerShell 5.1 and PowerShell 7.
+- Reports contain hostname, username and IPs (snapshot mode also process
+  names) - review before sharing outside your org.
+- Windows 11 24H2: if Location is off, Windows hides which AP you are on, so
+  roam detection and the neighbor scan are limited. The script warns about it.
+- Repo layout: src/nwa.src.ps1 + index.html are the sources; build.ps1 bakes
+  index.html into nwa.ps1 as the report template. Edit src, run build, commit.
 
-## License
-
-MIT
+MIT license.

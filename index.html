@@ -60,11 +60,6 @@
   kbd{font-family:var(--mono);font-size:12px;background:#f3f4f6;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px}
 
   /* code block */
-  #httpField{margin:8px 0 4px}
-  .fieldlabel{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
-  #httpInput{width:100%;font-family:var(--mono);font-size:13px;color:var(--text);background:var(--bg);
-    border:1px solid var(--line);border-radius:8px;padding:9px 11px;resize:vertical;min-height:42px}
-  #httpInput:focus{outline:none;border-color:var(--primary)}
   .cmdwrap{position:relative;margin:10px 0 14px}
   .cmd{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0;
     font-family:var(--mono);font-size:12.5px;line-height:1.5;color:#334155;
@@ -136,7 +131,8 @@
   /* connectivity / service timeline */
   .timeline{display:flex;gap:1px;height:40px;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:10px 0 6px;background:#eef1f5}
   .tcol{flex:1 1 0;min-width:1px}
-  .t-ok{background:#22c55e} .t-warn{background:#f59e0b} .t-bad{background:#ef4444}
+  .t-ok{background:#22c55e} .t-warn{background:#f59e0b} .t-bad{background:#ef4444} .t-gap{background:#c2c8d1}
+  [data-theme="dark"] .t-gap{background:#4b5563}
   .tleg{display:flex;gap:18px;font-size:12px;color:var(--muted);margin:8px 0 0;flex-wrap:wrap}
   .tleg i{font-style:normal;display:inline-flex;align-items:center;gap:6px}
   .tleg b{width:11px;height:11px;border-radius:3px;display:inline-block}
@@ -228,38 +224,24 @@
 <main class="container" id="screen">
   <div id="main">
     <div id="intake">
-      <div class="tabs" role="tablist">
-        <button class="tab" id="mSnap" onclick="setMode('snap')">Snapshot</button>
-        <button class="tab active" id="mMon" onclick="setMode('monitor')">Monitor</button>
-      </div>
-
-      <p class="intro" id="intro"></p>
-
       <section class="card">
-        <h2 class="card-title"><span class="step-num">1</span> Get the probe <span class="tag" id="psTag"></span></h2>
-        <p class="muted" id="psDesc" style="margin:0 0 4px"></p>
-        <div id="httpField">
-          <label class="fieldlabel" for="httpInput">Sites to test <span class="muted">(optional - one per line)</span></label>
-          <textarea id="httpInput" rows="2" placeholder="e.g. yourapp.com&#10;intranet.local"></textarea>
-        </div>
+        <h2 class="card-title"><span class="step-num">1</span> Run the script</h2>
         <div class="cmdwrap">
           <button class="cmd-copy" id="cmdCopy">Copy</button>
-          <pre class="cmd" id="cmdPreview">loading...</pre>
+          <pre class="cmd" id="cmdPreview">irm https://raw.githubusercontent.com/SolusKossi/nwa/main/nwa.ps1 -OutFile nwa.ps1
+powershell -ep bypass -f .\nwa.ps1</pre>
         </div>
-        <div class="row">
-          <button class="btn primary" id="copyBtn">Copy script</button>
-          <button class="btn" id="dlBtn">Download .ps1</button>
-          <span class="muted" id="copyState"></span>
-        </div>
-        <p class="note" id="psNote"></p>
+        <p class="note">Shows live status while it runs. Press <kbd>Q</kbd> to stop - it builds and opens the report itself.
+        Options: <b>-Snapshot</b> for a one-shot check, <b>-Sites "yourapp.com"</b> to also test your own sites.
+        <span class="muted" id="copyState"></span></p>
       </section>
 
       <section class="card">
-        <h2 class="card-title"><span class="step-num">2</span> Upload the result</h2>
+        <h2 class="card-title"><span class="step-num">2</span> Or drop a log here</h2>
         <div id="drop">
           <div class="drop-icon">&#8595;</div>
-          <strong id="dropLabel">Drop the file here</strong>
-          <span class="muted">snapshot or monitor file - or click to browse</span>
+          <strong id="dropLabel">Drop network-monitor.jsonl or network-report.json here</strong>
+          <span class="muted">or click to browse - analyzed locally in your browser</span>
           <input type="file" id="file" accept=".json,.jsonl,application/json,text/plain" hidden>
         </div>
         <div class="err" id="loadErr"></div>
@@ -270,353 +252,8 @@
   </div>
 </main>
 
-<!-- Canonical PowerShell probe. text/plain so backticks and $ are safe. -->
-<script type="text/plain" id="ps-script"># ============================================================
-#  nwa - Network Analysis Collector
-#  Gathers a broad network snapshot + recent history into one
-#  JSON file on your Desktop. Nothing is uploaded by this script.
-#  Run: paste this whole thing into PowerShell and press Enter.
-# ============================================================
-$ErrorActionPreference = 'SilentlyContinue'
-$report = [ordered]@{}
-$report.schema      = 'nwa-report/1'
-$report.generatedAt = (Get-Date).ToString('o')
-$report.hoursWindow = 24
-
-Write-Host 'Collecting system info...'
-$os = Get-CimInstance Win32_OperatingSystem
-$report.system = [ordered]@{
-  computerName = $env:COMPUTERNAME
-  user         = $env:USERNAME
-  os           = $os.Caption
-  osVersion    = [string]$os.Version
-  uptimeHours  = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalHours, 1)
-}
-
-Write-Host 'Collecting network adapters...'
-$report.adapters = @(Get-NetAdapter | ForEach-Object {
-  [ordered]@{
-    name        = $_.Name
-    description = $_.InterfaceDescription
-    status      = [string]$_.Status
-    macAddress  = $_.MacAddress
-    linkSpeed   = $_.LinkSpeed
-    mediaType   = [string]$_.PhysicalMediaType
-    ifIndex     = $_.ifIndex
-  }
-})
-
-Write-Host 'Collecting IP configuration...'
-$report.ipConfig = @(Get-NetIPConfiguration | ForEach-Object {
-  [ordered]@{
-    alias   = $_.InterfaceAlias
-    ipv4    = [string]$_.IPv4Address.IPAddress
-    ipv6    = [string]$_.IPv6Address.IPAddress
-    gateway = [string]$_.IPv4DefaultGateway.NextHop
-  }
-})
-
-$report.dns = @(Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses } | ForEach-Object {
-  [ordered]@{ alias = $_.InterfaceAlias; servers = @($_.ServerAddresses) }
-})
-
-Write-Host 'Collecting adapter traffic counters...'
-$report.adapterStats = @(Get-NetAdapterStatistics | ForEach-Object {
-  [ordered]@{
-    name                   = $_.Name
-    receivedBytes          = [int64]$_.ReceivedBytes
-    sentBytes              = [int64]$_.SentBytes
-    receivedUnicastPackets = [int64]$_.ReceivedUnicastPackets
-    sentUnicastPackets     = [int64]$_.SentUnicastPackets
-  }
-})
-
-Write-Host 'Collecting Wi-Fi state...'
-$report.wifi = [ordered]@{}
-$wifiRaw = netsh wlan show interfaces
-if ($wifiRaw) {
-  $report.wifi.raw = ($wifiRaw -join "`n")
-  foreach ($line in $wifiRaw) {
-    if ($line -match '^\s*(SSID|BSSID|Signal|Channel|Band|Radio type|Receive rate \(Mbps\)|Transmit rate \(Mbps\)|Authentication|State)\s*:\s*(.+)$') {
-      $report.wifi[$matches[1].Trim()] = $matches[2].Trim()
-    }
-  }
-}
-
-Write-Host 'Running latency tests (this takes a few seconds)...'
-$report.latency = @(foreach ($t in @('1.1.1.1','8.8.8.8','google.com')) {
-  $r = Test-Connection -ComputerName $t -Count 4 -ErrorAction SilentlyContinue
-  $recv = @($r).Count
-  $times = @($r | ForEach-Object { if ($_.PSObject.Properties['ResponseTime']) { $_.ResponseTime } else { $_.Latency } })
-  [ordered]@{
-    target   = $t
-    sent     = 4
-    received = $recv
-    lossPct  = [math]::Round((1 - ($recv / 4)) * 100, 0)
-    avgMs    = if ($times) { [math]::Round(($times | Measure-Object -Average).Average, 1) } else { $null }
-    minMs    = if ($times) { ($times | Measure-Object -Minimum).Minimum } else { $null }
-    maxMs    = if ($times) { ($times | Measure-Object -Maximum).Maximum } else { $null }
-  }
-})
-
-Write-Host 'Testing DNS resolution speed...'
-$report.dnsTest = @(foreach ($h in @('google.com','cloudflare.com','microsoft.com')) {
-  $sw  = [System.Diagnostics.Stopwatch]::StartNew()
-  $res = Resolve-DnsName -Name $h -Type A -ErrorAction SilentlyContinue
-  $sw.Stop()
-  [ordered]@{
-    host      = $h
-    ms        = [math]::Round($sw.Elapsed.TotalMilliseconds, 0)
-    resolved  = [bool]$res
-    addresses = @($res | Where-Object { $_.IPAddress } | ForEach-Object { $_.IPAddress })
-  }
-})
-
-Write-Host 'Collecting active connections...'
-$procs = @{}
-Get-Process | ForEach-Object { $procs[$_.Id] = $_.ProcessName }
-$report.connections = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | ForEach-Object {
-  [ordered]@{
-    localAddress  = $_.LocalAddress
-    localPort     = $_.LocalPort
-    remoteAddress = $_.RemoteAddress
-    remotePort    = $_.RemotePort
-    process       = $procs[[int]$_.OwningProcess]
-    pid           = $_.OwningProcess
-  }
-} | Select-Object -First 250)
-
-Write-Host 'Collecting listening ports...'
-$report.listening = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
-  [ordered]@{
-    localAddress = $_.LocalAddress
-    localPort    = $_.LocalPort
-    process      = $procs[[int]$_.OwningProcess]
-    pid          = $_.OwningProcess
-  }
-} | Select-Object -First 150)
-
-$report.routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | ForEach-Object {
-  [ordered]@{ ifAlias = $_.InterfaceAlias; nextHop = $_.NextHop; metric = $_.RouteMetric }
-})
-
-Write-Host 'Looking up public IP (best effort)...'
-try   { $report.publicIp = (Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -TimeoutSec 5).ip }
-catch { $report.publicIp = $null }
-
-Write-Host 'Collecting recent network events (last 24h)...'
-$since = (Get-Date).AddHours(-24)
-$report.events = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; StartTime = $since } -ErrorAction SilentlyContinue |
-  Where-Object { $_.ProviderName -match 'Tcpip|Dhcp|WLAN|NetworkProfile|Netwtw|NDIS|Wlansvc|Dnscache' } |
-  Select-Object -First 300 | ForEach-Object {
-    [ordered]@{
-      time     = $_.TimeCreated.ToString('o')
-      level    = [string]$_.LevelDisplayName
-      provider = $_.ProviderName
-      id       = $_.Id
-      message  = ($_.Message -replace '\s+', ' ').Trim()
-    }
-  })
-
-$outPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'network-report.json'
-$report | ConvertTo-Json -Depth 8 | Out-File -FilePath $outPath -Encoding utf8
-Write-Host ''
-Write-Host "==> Saved report to: $outPath" -ForegroundColor Green
-Write-Host '    Now upload that file back to the nwa page to analyze it.' -ForegroundColor Green
-Start-Process explorer.exe "/select,`"$outPath`""
-</script>
-
-<!-- Canonical MONITOR probe (continuous). text/plain so backticks/$ are safe. -->
-<script type="text/plain" id="ps-monitor"># ============================================================
-#  nwa - Network MONITOR  (intermittent-issue mode)
-#  Samples your connection every few seconds and appends each
-#  result to a log on your Desktop. Runs FOREVER until you stop
-#  it with Ctrl+C. The log is saved continuously, so it's ready
-#  to upload to the nwa MONITOR view the moment you stop.
-#  Nothing is uploaded by this script.
-#
-#  --- you can edit these settings ---
-$IntervalSec     = 10    # seconds between checks
-$DurationHours   = 0     # 0 = run forever (until Ctrl+C). Set e.g. 8 to auto-stop.
-$PingCount       = 5     # pings per target per check (for jitter / micro-loss)
-$NeighborScanSec = 300   # how often to scan nearby Wi-Fi APs (channel congestion). 0 = never.
-$httpTargets   = @(      # optional: sites to test by name, e.g. 'https://yourapp.com'. Leave empty for none.
-)
-# ============================================================
-$ErrorActionPreference = 'SilentlyContinue'
-$ProgressPreference    = 'SilentlyContinue'
-$targets = @('1.1.1.1','8.8.8.8')
-$dnsHost = 'google.com'
-$out = Join-Path ([Environment]::GetFolderPath('Desktop')) 'network-monitor.jsonl'
-
-# fast multi-ping (no 1s gap) - returns recv/loss/min/avg/max/jitter
-function Test-PingSet([string]$ip,[int]$count,[int]$timeoutMs){
-  $rtts = New-Object System.Collections.Generic.List[int]
-  $pinger = New-Object System.Net.NetworkInformation.Ping
-  for ($i=0; $i -lt $count; $i++) {
-    try { $pr = $pinger.Send($ip,$timeoutMs); if ($pr.Status -eq 'Success') { $rtts.Add([int]$pr.RoundtripTime) } } catch {}
-  }
-  $recv = $rtts.Count
-  $o = [ordered]@{ recv=$recv; loss=[math]::Round((1-($recv/$count))*100,0); min=$null; avg=$null; max=$null; jit=$null }
-  if ($recv -gt 0) {
-    $o.min = ($rtts | Measure-Object -Minimum).Minimum
-    $o.max = ($rtts | Measure-Object -Maximum).Maximum
-    $o.avg = [math]::Round(($rtts | Measure-Object -Average).Average,0)
-    if ($rtts.Count -gt 1) {
-      $d = New-Object System.Collections.Generic.List[int]
-      for ($i=1; $i -lt $rtts.Count; $i++) { $d.Add([math]::Abs($rtts[$i]-$rtts[$i-1])) }
-      $o.jit = [math]::Round(($d | Measure-Object -Average).Average,0)
-    } else { $o.jit = 0 }
-  }
-  return $o
-}
-
-# scan nearby Wi-Fi networks -> how crowded is my channel (co-channel contention)
-function Get-Congestion([int]$myChan){
-  $chans = New-Object System.Collections.Generic.List[int]
-  foreach ($l in (netsh wlan show networks mode=bssid)) {
-    if ($l -match '^\s*Channel\s*:\s*(\d+)') { $chans.Add([int]$matches[1]) }
-  }
-  [ordered]@{ total = $chans.Count; coChan = @($chans | Where-Object { $_ -eq $myChan }).Count; chan = $myChan }
-}
-
-# current DNS servers + default gateway (so the analysis can show them)
-$upIdx = @((Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }).ifIndex)
-$dnsServers = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-  Where-Object { $_.ServerAddresses -and ($upIdx -contains $_.InterfaceIndex) } |
-  ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
-$gateway = $null
-try { $gateway = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1).IPv4DefaultGateway.NextHop } catch {}
-# if the gateway doesn't answer ICMP, skip it (otherwise every tick wastes ~5s pinging a silent host)
-if ($gateway) {
-  $gwTest = Test-PingSet $gateway 2 800
-  if ($gwTest.recv -eq 0) { Write-Host "Gateway $gateway doesn't answer ping (ICMP blocked) - skipping gateway checks." -ForegroundColor DarkYellow; $gateway = $null }
-}
-
-# adapter + driver + power-management (one-time context; radio power-saving is a common cause of drops)
-$adapterInfo = $null
-try {
-  $a = Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' } |
-       Sort-Object { if ($_.PhysicalMediaType -match '802.11|Wireless') { 0 } else { 1 } } | Select-Object -First 1
-  if ($a) {
-    $pm = $null
-    try { $p = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction Stop
-          if ($p) { $pm = [ordered]@{ selectiveSuspend = [string]$p.SelectiveSuspend; sleepOnDisconnect = [string]$p.DeviceSleepOnDisconnect } } } catch {}
-    $adapterInfo = [ordered]@{
-      name = $a.Name; description = $a.InterfaceDescription
-      driverVersion = [string]$a.DriverVersion; driverDate = [string]$a.DriverDate
-      linkSpeed = [string]$a.LinkSpeed; powerMgmt = $pm
-    }
-  }
-} catch {}
-
-# IPv6 reachability (one-time context)
-$ipv6 = $null
-try { $r6 = Test-PingSet '2606:4700:4700::1111' 2 1200; $ipv6 = [ordered]@{ reachable = ($r6.recv -gt 0); ms = $r6.avg } }
-catch { $ipv6 = [ordered]@{ reachable = $false; ms = $null } }
-
-$meta = [ordered]@{
-  schema          = 'nwa-monitor/1'
-  startedAt       = (Get-Date).ToString('o')
-  intervalSec     = $IntervalSec
-  durationHours   = $DurationHours
-  pingCount       = $PingCount
-  neighborScanSec = $NeighborScanSec
-  computerName    = $env:COMPUTERNAME
-  targets         = $targets
-  gateway         = $gateway
-  dnsHost         = $dnsHost
-  dnsServers      = $dnsServers
-  adapter         = $adapterInfo
-  ipv6            = $ipv6
-  httpTargets     = $httpTargets
-}
-Set-Content -Path $out -Value ($meta | ConvertTo-Json -Compress) -Encoding utf8
-
-$end = (Get-Date).AddHours($DurationHours)
-$stopMsg = if ($DurationHours -le 0) { 'Running until you press Ctrl+C.' } else { "Auto-stops at $end (Ctrl+C to stop early)." }
-Write-Host "MONITORING every ${IntervalSec}s ($PingCount pings/target). $stopMsg" -ForegroundColor Green
-Write-Host ("Gateway: {0}   Services: {1}" -f $(if($gateway){$gateway}else{'n/a'}), ($httpTargets -join ', ')) -ForegroundColor Green
-Write-Host "Logging to: $out" -ForegroundColor Green
-Write-Host ''
-$nbrEvery = if ($NeighborScanSec -gt 0) { [math]::Max(1, [int]($NeighborScanSec / $IntervalSec)) } else { 0 }
-$k = 0
-try {
-  while ($DurationHours -le 0 -or (Get-Date) -lt $end) {
-    $tick = [ordered]@{ t = (Get-Date).ToString('o') }
-
-    # connectivity: gateway (local hop) + internet IPs, each a burst of pings
-    $q = [ordered]@{}
-    if ($gateway) { $r = Test-PingSet $gateway $PingCount 1000; $q['gw'] = $r; $tick.gw = $(if ($r.recv) { $r.avg } else { -1 }) } else { $tick.gw = $null }
-    foreach ($tg in $targets) { $r = Test-PingSet $tg $PingCount 1000; $q[$tg] = $r; $tick[$tg] = $(if ($r.recv) { $r.avg } else { -1 }) }
-    $tick.q = $q
-
-    # DNS resolution time
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $rr = Resolve-DnsName -Name $dnsHost -Type A -ErrorAction SilentlyContinue
-    $sw.Stop()
-    $tick.dns = $(if ($rr) { [int]$sw.Elapsed.TotalMilliseconds } else { -1 })
-
-    # Wi-Fi link detail (signal, which AP/BSSID, band, channel, PHY rates) for roaming/distance analysis
-    $wsig=$null;$wbssid=$null;$wband=$null;$wchan=$null;$wrx=$null;$wtx=$null;$wradio=$null
-    foreach ($l in (netsh wlan show interfaces)) {
-      if     ($l -match '^\s*Signal\s*:\s*(\d+)%')                 { $wsig=[int]$matches[1] }
-      elseif ($l -match 'BSSID\s*:\s*([0-9a-fA-F:]{17})')          { $wbssid=$matches[1].Trim() }
-      elseif ($l -match '^\s*Band\s*:\s*(.+)$')                    { $wband=$matches[1].Trim() }
-      elseif ($l -match '^\s*Channel\s*:\s*(\d+)')                 { $wchan=[int]$matches[1] }
-      elseif ($l -match '^\s*Receive rate \(Mbps\)\s*:\s*([\d\.]+)'){ $wrx=[double]$matches[1] }
-      elseif ($l -match '^\s*Transmit rate \(Mbps\)\s*:\s*([\d\.]+)'){ $wtx=[double]$matches[1] }
-      elseif ($l -match '^\s*Radio type\s*:\s*(.+)$')              { $wradio=$matches[1].Trim() }
-    }
-    $tick.sig=$wsig; $tick.bssid=$wbssid; $tick.band=$wband; $tick.chan=$wchan; $tick.rx=$wrx; $tick.tx=$wtx; $tick.radio=$wradio
-
-    # periodic channel-congestion scan (counts nearby APs on your channel)
-    if ($nbrEvery -gt 0 -and $wchan -and ($k % $nbrEvery -eq 0)) { $tick.nbr = Get-Congestion $wchan }
-    $k++
-
-    $tick.up = [bool](Get-NetAdapter | Where-Object { $_.Status -eq 'Up' })
-
-    # HTTP(S) reachability per service. ms = -1 means could NOT reach it at all.
-    $tick.http = @(foreach ($u in $httpTargets) {
-      $hsw = [System.Diagnostics.Stopwatch]::StartNew()
-      try {
-        $resp = Invoke-WebRequest -Uri $u -Method Head -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop
-        $hsw.Stop()
-        [ordered]@{ u = $u; ms = [int]$hsw.Elapsed.TotalMilliseconds; code = [int]$resp.StatusCode }
-      } catch {
-        $hsw.Stop()
-        $code = 0
-        if ($_.Exception.Response) { try { $code = [int]$_.Exception.Response.StatusCode } catch {} }
-        if ($code -gt 0) { [ordered]@{ u = $u; ms = [int]$hsw.Elapsed.TotalMilliseconds; code = $code } }
-        else             { [ordered]@{ u = $u; ms = -1; code = 0 } }
-      }
-    })
-
-    Add-Content -Path $out -Value ($tick | ConvertTo-Json -Compress -Depth 6) -Encoding utf8
-
-    # live console line
-    $gwq = $q['gw']; $i1 = $q['1.1.1.1']
-    $loss = if ($i1) { $i1.loss } else { 100 }
-    $state = if (-not $tick.up -or ($i1 -and $i1.recv -eq 0)) { 'DOWN' } elseif ($tick.dns -lt 0) { 'DNS!' } elseif ($loss -gt 0) { 'LOSS' } else { ' ok ' }
-    $gwStr = if ($gateway) { "gw=$($tick.gw)ms " } else { "" }
-    Write-Host ("[{0}] {1}  {2}net={3}ms loss={4}% jit={5}ms  dns={6}ms  sig={7}% {8}" -f `
-      (Get-Date -Format HH:mm:ss), $state, $gwStr, $tick.'1.1.1.1', $loss, $(if($i1){$i1.jit}else{'-'}), $tick.dns, $wsig, $(if($wband){$wband}else{''}))
-
-    Start-Sleep -Seconds $IntervalSec
-  }
-}
-finally {
-  Write-Host ''
-  Write-Host "==> Monitor log saved: $out" -ForegroundColor Green
-  Write-Host '    Drag it onto the nwa MONITOR view to analyze.' -ForegroundColor Green
-  Start-Process explorer.exe "/select,`"$out`""
-}
-</script>
-
 <script>
 const $ = s => document.querySelector(s);
-const PS_SNAP = document.getElementById('ps-script').textContent.replace(/^\n/, '');
-const PS_MON  = document.getElementById('ps-monitor').textContent.replace(/^\n/, '');
 
 /* ---------- theme (dark by default) ---------- */
 function applyTheme(t){
@@ -628,108 +265,14 @@ function applyTheme(t){
 function toggleTheme(){ applyTheme(document.documentElement.dataset.theme==='dark' ? 'light' : 'dark'); }
 applyTheme(document.documentElement.dataset.theme || 'dark');
 
-/* ---------- mode toggle (snapshot / monitor) ---------- */
-const MODES = {
-  snap: {
-    file:'collect.ps1', tag:'one-shot - ~15s',
-    intro:'',
-    desc:'Run in PowerShell - writes network-report.json to your Desktop.',
-    note:'~15 seconds, no admin needed. The <b>downloaded</b> script opens the report for you when it finishes.',
-    drop:'Drop network-report.json here'
-  },
-  monitor: {
-    file:'monitor.ps1', tag:'continuous - runs until stopped',
-    intro:'',
-    desc:'Run in PowerShell and leave it running - logs to network-monitor.jsonl.',
-    note:'Runs until you press <kbd>Ctrl</kbd>+<kbd>C</kbd>. The <b>downloaded</b> script opens the report for you on stop; or copy/paste it and drop the file here. Edit <b>$IntervalSec</b>, <b>$httpTargets</b> or <b>$DurationHours</b> at the top.',
-    drop:'Drop network-monitor.jsonl here'
-  }
-};
-// turn the "sites to test" box into a PowerShell $httpTargets array, baked into the script
-function parseTargets(text){
-  return (text||'').split(/[\n,]+/).map(s=>s.trim()).filter(Boolean)
-    .map(s=> /^https?:\/\//i.test(s) ? s : 'https://'+s);
-}
-function psHttpArray(targets){
-  if(!targets.length) return '$httpTargets   = @()   # optional: add sites like \'https://yourapp.com\'';
-  return '$httpTargets   = @(\n'+targets.map(u=>`  '${u.replace(/'/g,"''")}'`).join(',\n')+'\n)';
-}
-function buildMonitorScript(){
-  const t = parseTargets($('#httpInput') ? $('#httpInput').value : '');
-  return PS_MON.replace(/\$httpTargets\s*=\s*@\([\s\S]*?\n\)/, psHttpArray(t));
-}
-let CURMODE = 'monitor';
-let CUR = { script:PS_SNAP, name:'collect.ps1' };
-function refreshScript(){
-  CUR.script = (CURMODE==='monitor') ? buildMonitorScript() : PS_SNAP;
-  const el = $('#cmdPreview'); el.textContent = CUR.script; el.scrollTop = 0;
-}
-function setMode(m){
-  CURMODE = m;
-  $('#mSnap').classList.toggle('active', m==='snap');
-  $('#mMon').classList.toggle('active', m==='monitor');
-  const c = MODES[m];
-  CUR.name = c.file;
-  $('#intro').innerHTML = c.intro;
-  $('#psTag').textContent = c.tag;
-  $('#psDesc').textContent = c.desc;
-  $('#psNote').innerHTML = c.note;
-  $('#dropLabel').textContent = c.drop;
-  $('#dlBtn').textContent = 'Download '+c.file;
-  $('#httpField').style.display = (m==='monitor') ? '' : 'none';
-  refreshScript();
-}
-const httpInputEl = $('#httpInput');
-if(httpInputEl) httpInputEl.addEventListener('input', ()=>{ if(CURMODE==='monitor') refreshScript(); });
-setMode('monitor');
-
-async function copyProbe(){
-  try { await navigator.clipboard.writeText(CUR.script); flash('Copied - paste into PowerShell'); }
-  catch { selectText($('#cmdPreview')); flash('Press Ctrl+C to copy'); }
-}
-$('#copyBtn').onclick = copyProbe;
+/* ---------- copy the run commands ---------- */
 $('#cmdCopy').onclick = async () => {
-  await copyProbe();
+  const txt = $('#cmdPreview').textContent;
+  try { await navigator.clipboard.writeText(txt); flash('Copied - paste into PowerShell'); }
+  catch { selectText($('#cmdPreview')); flash('Press Ctrl+C to copy'); }
   const b=$('#cmdCopy'), t=b.textContent; b.textContent='Copied'; setTimeout(()=>b.textContent=t,1600);
 };
-// base64(utf8) of a string, chunked to avoid call-stack limits
-function base64Utf8(str){
-  const bytes=new TextEncoder().encode(str); let bin=''; const chunk=0x8000;
-  for(let i=0;i<bytes.length;i+=chunk) bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+chunk));
-  return btoa(bin);
-}
-// PowerShell that turns the log into a self-contained network-report.html and opens it
-function reportGenPS(fileVar, jsonl){
-  const arr = jsonl ? `'[' + ((Get-Content ${fileVar}) -join ',') + ']'` : `'[' + (Get-Content ${fileVar} -Raw) + ']'`;
-  // split so this literal isn't a second match in the serialized page
-  const MARK = 'window.NWA_EMBEDDED = window.NWA_EMBEDDED ' + '|| null;';
-  return [
-'  try {',
-'    $tpl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($NWA_B64))',
-'    $arr = '+arr,
-"    $html = $tpl.Replace('"+MARK+"', 'window.NWA_EMBEDDED = ' + $arr + ';')",
-"    $reportPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'network-report.html'",
-'    Set-Content -Path $reportPath -Value $html -Encoding utf8',
-'    Write-Host "==> Report: $reportPath" -ForegroundColor Green',
-'    Start-Process $reportPath',
-'  } catch { Write-Host "Could not build report: $_" -ForegroundColor Red }'
-  ].join('\n');
-}
-// build the self-contained probe: the current script + an embedded analyzer that opens on stop
-function buildSelfContained(){
-  const b64 = base64Utf8('<!doctype html>\n'+document.documentElement.outerHTML);
-  const isSnap = CURMODE==='snap';
-  const explorerLine = isSnap ? 'Start-Process explorer.exe "/select,`"$outPath`""'
-                              : 'Start-Process explorer.exe "/select,`"$out`""';
-  let s = "$NWA_B64 = '"+b64+"'\n" + CUR.script;
-  s = s.replace(explorerLine, () => reportGenPS(isSnap?'$outPath':'$out', !isSnap));  // fn-replacer avoids $ issues
-  return s;
-}
-$('#dlBtn').onclick = () => {
-  const blob=new Blob([buildSelfContained()],{type:'text/plain'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=CUR.name; a.click(); URL.revokeObjectURL(a.href);
-};
-function flash(m){ const e=$('#copyState'); e.textContent=m; setTimeout(()=>e.textContent='',3200); }
+function flash(m){ const e=$('#copyState'); if(e){ e.textContent=' '+m; setTimeout(()=>e.textContent='',3200); } }
 function selectText(el){ const r=document.createRange(); r.selectNodeContents(el);
   const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
 
@@ -1013,10 +556,21 @@ function analyzeMonitor(meta, ticks){
              sig:(typeof tk.sig==='number'?tk.sig:null), httpFail, httpSlow,
              loss, jit, gw:gwms, gwReach:(gwms!=null && gwms>=0),
              bssid:tk.bssid||null, band:tk.band||null, chan:(typeof tk.chan==='number'?tk.chan:null),
-             rx:(typeof tk.rx==='number'?tk.rx:null), tx:(typeof tk.tx==='number'?tk.tx:null), radio:tk.radio||null };
+             rx:(typeof tk.rx==='number'?tk.rx:null), tx:(typeof tk.tx==='number'?tk.tx:null), radio:tk.radio||null,
+             eth:(typeof tk.eth==='number'?tk.eth:null), trace:(Array.isArray(tk.trace)?tk.trace:null) };
   });
   const N=rows.length;
   const hasQ = rows.some(r=>r.loss!=null);          // v2 log with burst data?
+
+  // sleep / power-off gaps: big holes between samples are "no data", not "all fine"
+  const GAPF = 3;
+  let activeSec = N ? interval : 0, noDataSec = 0;
+  const gapList = [];
+  for(let i=1;i<N;i++){
+    const dt = (new Date(rows[i].t) - new Date(rows[i-1].t)) / 1000;
+    if(dt > Math.max(GAPF*interval, 60)){ rows[i].gapBefore = dt; noDataSec += dt; gapList.push({t:rows[i-1].t, dur:dt}); }
+    else if(dt > 0) activeSec += dt;
+  }
 
   // per-service (http) reachability series, aligned to rows
   const httpSeries = httpTargets.map(u=>{
@@ -1037,14 +591,15 @@ function analyzeMonitor(meta, ticks){
       slow: reach.filter(s=>s.ms>=HTTP_SLOW).length,
       fails: fails.length, failUp: fails.filter(s=>s.internetUp).length, outs };
   });
-  // outages = contiguous down runs
+  // outages = contiguous down runs (carry the first trace captured during the outage)
   const outages=[]; let cur=null;
-  rows.forEach((r,i)=>{ if(r.down){ if(!cur)cur={start:r.t,count:0}; cur.count++; cur.end=r.t; }
+  rows.forEach((r,i)=>{ if(r.down){ if(!cur)cur={start:r.t,count:0,trace:null}; cur.count++; cur.end=r.t; if(r.trace&&!cur.trace)cur.trace=r.trace; }
     else if(cur){ outages.push(cur); cur=null; } });
   if(cur) outages.push(cur);
   const downTicks=rows.filter(r=>r.down).length;
-  const uptimePct=N?100*(N-downTicks)/N:100;
   const totalDownSec=downTicks*interval;
+  const uptimePct=activeSec>0?Math.max(0,Math.min(100,100*(1-totalDownSec/activeSec))):100;  // time-weighted, gaps excluded
+  const activeDays=Math.max(activeSec/86400, 1/24);
   const lats=rows.map(r=>r.best).filter(v=>v!=null);
   const avgLat=lats.length?lats.reduce((a,b)=>a+b,0)/lats.length:null;
   const p95=pctl(lats,95);
@@ -1102,11 +657,28 @@ function analyzeMonitor(meta, ticks){
   const ipv6 = meta.ipv6 || null;
   const pmSuspend = !!(adapter && adapter.powerMgmt && /enabled/i.test(adapter.powerMgmt.selectiveSuspend||''));
 
+  // Windows Wi-Fi events (disconnect reasons from the WLAN-AutoConfig log)
+  const wlanEvs = ticks.flatMap(t=>Array.isArray(t&&t.wlanEv)?t.wlanEv:[]);
+  const wlanDiscs = wlanEvs.filter(e=>e&&e.id===8003);
+  const discReasons = {};
+  wlanDiscs.forEach(e=>{ const r=String(e.msg||'disconnect').replace(/^disconnect:?\s*/,'')||'unspecified'; discReasons[r]=(discReasons[r]||0)+1; });
+  const topReasons = Object.entries(discReasons).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+  // Ethernet link renegotiation (1000 -> 100 Mbps = failing cable/port)
+  const ethRows = rows.filter(r=>r.eth!=null);
+  const ethShifts=[]; let prevEth=null;
+  ethRows.forEach(r=>{ if(prevEth!=null && r.eth!==prevEth) ethShifts.push({t:r.t,from:prevEth,to:r.eth}); prevEth=r.eth; });
+  const ethMax=ethRows.length?Math.max(...ethRows.map(r=>r.eth)):null;
+  const ethMin=ethRows.length?Math.min(...ethRows.map(r=>r.eth)):null;
+  const ethDowngraded = ethMax!=null && ethMin!=null && ethMax>=1000 && ethMin<ethMax;
+
   const problems=[]; const P=(level,title,detail,fix,when)=>problems.push({level,title,detail,fix,when});
   const tWhen = pred => whenLabel(rows.filter(pred).map(r=>r.t));
   if(outages.length){
     const when=outages.slice(0,6).map(o=>`${fmtTime(o.start)} (${fmtDur(o.count*interval)})`).join(', ');
-    const lvl = totalDownSec>=120 || outages.length>=3 ? 'bad':'warn';
+    // severity scales with how often / how long, not mere existence (one 10s blip in days is not red)
+    const maxOutSec = Math.max(...outages.map(o=>o.count*interval));
+    const lvl = (totalDownSec>=300 || outages.length/activeDays>=3 || maxOutSec>=120) ? 'bad':'warn';
     P(lvl, `${outages.length} outage${outages.length>1?'s':''} - total ${fmtDur(totalDownSec)} offline`,
       `Your connection went fully down and came back. ${onWifi?'Could be Wi-Fi range/interference or the router/ISP.':'Likely the router or ISP.'} Times: ${when}${outages.length>6?' ...':''}.`,
       onWifi?'Check if drops line up with weak signal below. If so, move closer / use Ethernet. Otherwise reboot the router and, if it persists, report the times to your ISP.'
@@ -1140,13 +712,13 @@ function analyzeMonitor(meta, ticks){
   }
   // ---- v2: packet loss / jitter (the real Teams killers), gateway hop, roaming, band, rate ----
   if(hasQ && lossTicks){
-    P((maxLoss>=20||avgLoss>=2)?'bad':'warn', `Packet loss on ${lossTicks} of ${lossRows.length} checks (peak ${maxLoss}%)`,
+    P((lossTicks>=5 && (maxLoss>=20||avgLoss>=2) && lossTicks/activeDays>=2)?'bad':'warn', `Packet loss on ${lossTicks} of ${lossRows.length} checks (peak ${maxLoss}%)`,
       `Even while the connection was technically "up", pings were being dropped. This is exactly what makes Teams glitch, freeze or drop audio while web pages still load fine - and why it's so easy to miss.`,
       onWifi?'Loss without full outages usually means Wi-Fi interference or a weak link - compare with signal/roaming below. An Ethernet test at this seat would confirm it.':'Check for a saturated line or a failing cable/port.',
       tWhen(r=>!r.down&&r.loss!=null&&r.loss>0));
   }
   if(hasQ && jitHigh){
-    P(maxJit>=60?'bad':'warn', `High jitter on ${jitHigh} check${jitHigh>1?'s':''} (peak ${maxJit} ms)`,
+    P((maxJit>=60 && jitHigh>=5 && jitHigh/activeDays>=2)?'bad':'warn', `High jitter on ${jitHigh} check${jitHigh>1?'s':''} (peak ${maxJit} ms)`,
       `Round-trip times were unstable from one ping to the next. Jitter - not raw latency - is what breaks real-time audio/video, so this fits the Teams complaints.`,
       'On Wi-Fi this is typically interference or a weak/roaming link; Ethernet almost always removes it.',
       tWhen(r=>!r.down&&r.jit!=null&&r.jit>=30));
@@ -1158,7 +730,7 @@ function analyzeMonitor(meta, ticks){
       tWhen(r=>r.gwBad));
   }
   if(roams){
-    P(roams>=4?'bad':'warn', `Roamed between access points ${roams}x${aps.length>1?` (${aps.length} APs seen)`:''}`,
+    P((roams>=4 && roams/activeDays>=8)?'bad':'warn', `Roamed between access points ${roams}x${aps.length>1?` (${aps.length} APs seen)`:''}`,
       `The Wi-Fi kept handing off between access points during the session. Each handoff can stall traffic for 1-3s - a classic source of "Teams froze for a second" and random timeouts, and consistent with this seat sitting between two APs.`,
       'If roams line up with the loss/drops above, this seat is in a handoff zone. Ethernet avoids it entirely; otherwise AP placement or roaming/min-RSSI tuning on the controller is the fix.',
       whenLabel(roamAt));
@@ -1183,6 +755,19 @@ function analyzeMonitor(meta, ticks){
     P('warn', 'Wi-Fi power saving is enabled on the adapter',
       `The adapter is allowed to power-down the radio to save energy (selective suspend), which can cause exactly these brief, intermittent drops on laptops.`,
       'Device Manager -> the Wi-Fi adapter -> Power Management -> untick "Allow the computer to turn off this device to save power".');
+  }
+  if(wlanDiscs.length){
+    const rTxt = topReasons.map(([r,n])=>`${r} (${n}x)`).join(', ');
+    P((wlanDiscs.length/activeDays>=5)?'bad':'warn', `Windows logged ${wlanDiscs.length} Wi-Fi disconnect${wlanDiscs.length>1?'s':''}`,
+      `The adapter's own event log recorded why each drop happened: ${rTxt}. This is the driver/AP side of the story - "AP-initiated" points at the access point, "roaming" at coverage, "radio reset" at the driver.`,
+      'Match these reasons and times against the outages/roams above to pin the cause on the AP, the coverage, or the driver.',
+      whenLabel(wlanDiscs.map(e=>e.t)));
+  }
+  if(ethDowngraded){
+    P(ethMin<=100?'bad':'warn', `Ethernet link renegotiated ${ethMax} -> ${ethMin} Mbps`,
+      `The wired link dropped its negotiated speed during the session - the classic sign of a failing cable, connector or switch port.`,
+      'Reseat or replace the network cable, try another switch port, and check the cable run length.',
+      whenLabel(ethShifts.map(s=>s.t)));
   }
   // service reachability problems (e.g. xledger.net) - with internet-up vs down comparison
   httpSeries.forEach(h=>{
@@ -1220,14 +805,15 @@ function analyzeMonitor(meta, ticks){
   } else if(problems.length) verdict={level:'warn',ic:'!',big:'OCCASIONAL HICCUPS'};
   else verdict={level:'ok',ic:'OK',big:'ROCK SOLID'};
 
+  const findLvl = t => { const f=problems.find(p=>p.title.indexOf(t)>=0); return f?f.level:null; };
   const upStatus = uptimePct>=99.99?'ok':uptimePct>=99?'warn':'bad';
   const checks=[
     {label:'Uptime', status:upStatus, value:uptimePct.toFixed(uptimePct>=99.99?0:2)+'%'},
-    {label:'Outages', status:outages.length?'bad':'ok', value:String(outages.length)},
+    {label:'Outages', status:outages.length?(findLvl('outage')||'warn'):'ok', value:String(outages.length)},
   ];
   if(hasQ) checks.push(
-    {label:'Packet loss', status:lossTicks?((maxLoss>=20||avgLoss>=2)?'bad':'warn'):'ok', value:maxLoss!=null?(lossTicks?`${lossTicks}x / ${maxLoss}%`:'0%'):'--'},
-    {label:'Jitter', status:jitHigh?(maxJit>=60?'bad':'warn'):'ok', value:maxJit!=null?`${maxJit} ms`:'--'});
+    {label:'Packet loss', status:lossTicks?(findLvl('Packet loss')||'warn'):'ok', value:maxLoss!=null?(lossTicks?`${lossTicks}x / ${maxLoss}%`:'0%'):'--'},
+    {label:'Jitter', status:jitHigh?(findLvl('High jitter')||'warn'):'ok', value:maxJit!=null?`${maxJit} ms`:'--'});
   if(gwUsable) checks.push({label:'Gateway', status:gwDropWhileUp?(gwDropWhileUp>=3?'bad':'warn'):'ok', value:gwDropWhileUp?`${gwDropWhileUp} drops`:(gwAvg!=null?gwAvg+' ms':'ok')});
   httpSeries.forEach(h=>checks.push({label:h.host,
     status: h.fails?(h.reachPct<95?'bad':'warn'):(h.slow?'warn':'ok'),
@@ -1236,7 +822,9 @@ function analyzeMonitor(meta, ticks){
     {label:'Avg latency', status:avgLat==null?'bad':avgLat>=120?'warn':'ok', value:avgLat==null?'--':avgLat.toFixed(0)+' ms'},
     {label:'DNS fails', status:dnsFails?(dnsFails>=3?'bad':'warn'):'ok', value:String(dnsFails)});
   if(onWifi) checks.push({label:'Min Wi-Fi', status:minSig<40?(minSig<25?'bad':'warn'):'ok', value:minSig+'%'});
-  if(roams) checks.push({label:'Roams', status:roams>=4?'bad':'warn', value:String(roams)});
+  if(roams) checks.push({label:'Roams', status:findLvl('Roamed')||'warn', value:String(roams)});
+  if(wlanDiscs.length) checks.push({label:'Disconnects', status:findLvl('Wi-Fi disconnect')||'warn', value:String(wlanDiscs.length)});
+  if(ethRows.length) checks.push({label:'Wired link', status:ethDowngraded?(ethMin<=100?'bad':'warn'):'ok', value:(ethMin!=null?(ethDowngraded?ethMin+' Mbps!':ethMax+' Mbps'):'--')});
   if(coChanOthers!=null) checks.push({label:'Ch. neighbours', status:coChanOthers>=6?'bad':coChanOthers>=3?'warn':'ok', value:String(coChanOthers)});
   if(ipv6) checks.push({label:'IPv6', status:'ok', value: ipv6.reachable?(ipv6.ms!=null?ipv6.ms+' ms':'yes'):'n/a'});
 
@@ -1244,7 +832,9 @@ function analyzeMonitor(meta, ticks){
           uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsAvg,minSig,onWifi,startT,endT,spanSec,N,
           hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,
           gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamAt,aps,bands,on5,on24,minRate,lowRate,radio:(rows.find(r=>r.radio)||{}).radio,
-          coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend};
+          coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend,
+          activeSec,noDataSec,gapList,wlanDiscs,topReasons,ethRows,ethShifts,ethMax,ethMin,ethDowngraded,
+          bssidHidden:!!meta.bssidHidden};
 }
 
 function tickStatus(r){
@@ -1254,15 +844,17 @@ function tickStatus(r){
   return 'ok';
 }
 function timelineStrip(items, statusFn, legendHtml){
+  const RANK={ok:0,warn:1,gap:2,bad:3};
   const maxCols=170, per=Math.max(1,Math.ceil(items.length/maxCols)), cols=[];
   for(let i=0;i<items.length;i+=per){
     const slice=items.slice(i,i+per); let s='ok';
-    for(const it of slice){ const st=statusFn(it); if(st==='bad'){s='bad';break;} if(st==='warn')s='warn'; }
-    cols.push(`<div class="tcol t-${s}" title="${esc(fmtTime(slice[0].t))}-${esc(fmtTime(slice[slice.length-1].t))} - ${s.toUpperCase()}"></div>`);
+    for(const it of slice){ const st=statusFn(it); if((RANK[st]||0)>(RANK[s]||0)) s=st; if(s==='bad') break; }
+    const label = s==='gap' ? 'NO DATA (asleep / off)' : s.toUpperCase();
+    cols.push(`<div class="tcol t-${s}" title="${esc(fmtTime(slice[0].t))}-${esc(fmtTime(slice[slice.length-1].t))} - ${label}"></div>`);
   }
   return `<div class="timeline">${cols.join('')}</div>`+(legendHtml||'');
 }
-const MAIN_LEGEND=`<div class="tleg"><i><b class="t-ok"></b> healthy</i><i><b class="t-warn"></b> degraded (loss / jitter / weak Wi-Fi / gateway / DNS)</i><i><b class="t-bad"></b> down</i></div>`;
+const MAIN_LEGEND=`<div class="tleg"><i><b class="t-ok"></b> healthy</i><i><b class="t-warn"></b> degraded (loss / jitter / weak Wi-Fi / gateway / DNS)</i><i><b class="t-bad"></b> down</i><i><b class="t-gap"></b> no data (asleep / off)</i></div>`;
 const SVC_LEGEND=`<div class="tleg"><i><b class="t-ok"></b> reachable</i><i><b class="t-warn"></b> slow (>=1.5s)</i><i><b class="t-bad"></b> unreachable</i></div>`;
 const svcStatus = s => !s.ok ? 'bad' : (s.ms>=HTTP_SLOW ? 'warn' : 'ok');
 function latChart(rows){
@@ -1292,16 +884,19 @@ function renderMonitor(meta, ticks){
   if(!a.N){ out.innerHTML=html+`<p class="line dim">log has no samples yet - let the monitor run a while, then re-upload.</p>`;
     window.scrollTo({top:0,behavior:'smooth'}); return; }
 
+  const noData = a.noDataSec>600 ? ' (no data '+fmtDur(a.noDataSec)+' - machine asleep or off)' : '';
   html+=`<div class="verdict v-${a.verdict.level}"><div class="ic">${a.verdict.ic}</div>
     <div><div class="big">${a.verdict.big}</div><div class="small">${
-      a.problems.length? a.problems.length+' thing'+(a.problems.length>1?'s':'')+' happened over '+fmtDur(a.spanSec)
-      : 'no drops, spikes or DNS failures across '+fmtDur(a.spanSec)}</div></div></div>`;
+      a.problems.length? a.problems.length+' thing'+(a.problems.length>1?'s':'')+' happened over '+fmtDur(a.activeSec)+' monitored'+noData
+      : 'no drops, spikes or DNS failures across '+fmtDur(a.activeSec)+' monitored'+noData}</div></div></div>`;
 
   html+=`<div class="checks">${a.checks.map(c=>
     `<div class="chk ${c.status}"><div class="cl">${esc(c.label)}</div><div class="cv">${esc(c.value)}</div></div>`).join('')}</div>`;
 
+  // timeline with grey no-data segments where samples stopped (sleep / power off)
+  const tlItems=[]; a.rows.forEach(r=>{ if(r.gapBefore) tlItems.push({gap:true,t:r.t}); tlItems.push(r); });
   html+=sec('CONNECTIVITY TIMELINE', fmtDur(a.spanSec)+' - each bar = a slice of time',
-    timelineStrip(a.rows, tickStatus, MAIN_LEGEND)+latChart(a.rows));
+    timelineStrip(tlItems, it=>it.gap?'gap':tickStatus(it), MAIN_LEGEND)+latChart(a.rows));
 
   // per-service reachability (xledger.net etc.) - each gets its own timeline
   if(a.httpSeries.length){
@@ -1321,7 +916,9 @@ function renderMonitor(meta, ticks){
       `<p class="line">Band <b>${esc(a.bands.join(', ')||'?')}</b>${r0.chan?` - channel <b>${r0.chan}</b>`:''}${a.radio?` - <b>${esc(a.radio)}</b>`:''} - signal <b>${a.minSig}-${Math.max(...a.rows.map(r=>r.sig).filter(v=>v!=null))}%</b> (min ${a.minSig}%)</p>
        <p class="line">Link rate ${a.minRate!=null?`min <b>${a.minRate} Mbps</b>`:'<b>--</b>'}${a.lowRate?` - <span style="color:var(--amber)">${a.lowRate}x under 60 Mbps</span>`:''} - access points seen <b>${a.aps.length}</b> - roams <b style="color:${a.roams?'var(--amber)':'var(--p)'}">${a.roams}</b>${a.roams?` (${a.roamAt.map(t=>esc(clock(t))).join(', ')}${a.roams>a.roamAt.length?' ...':''})`:''}</p>
        ${a.coChanOthers!=null?`<p class="line">Channel congestion: <b style="color:${a.coChanOthers>=3?'var(--amber)':'var(--p)'}">${a.coChanOthers}</b> other network${a.coChanOthers===1?'':'s'} on channel ${a.congChan}${a.nbrTotalMax!=null?` - ${a.nbrTotalMax} APs nearby in total`:''}</p>`:''}
+       ${a.wlanDiscs&&a.wlanDiscs.length?`<p class="line">Windows disconnect log: <b style="color:var(--amber)">${a.wlanDiscs.length}</b> - ${esc(a.topReasons.map(([r,n])=>r+' ('+n+'x)').join(', '))}</p>`:''}
        ${a.adapter?`<p class="line dim">Adapter: ${esc(a.adapter.description||a.adapter.name||'?')}${a.adapter.driverVersion?` - driver ${esc(a.adapter.driverVersion)}`:''}${a.adapter.driverDate?` (${esc(a.adapter.driverDate)})`:''}${a.pmSuspend?` - <span style="color:var(--amber)">power saving on</span>`:''}</p>`:''}
+       ${a.bssidHidden?`<p class="line dim">Windows hid the AP identity during this run (Location off) - roam detection was limited.</p>`:''}
        ${a.on5&&!a.on24?`<p class="line dim">On 5 GHz only - shorter range than 2.4 GHz; relevant if the AP is far.</p>`:''}`);
   }
 
@@ -1337,11 +934,23 @@ function renderMonitor(meta, ticks){
   // ---- breakdown drawer ----
   let raw='';
   if(a.outages.length){
-    raw+=sec('OUTAGE LOG',`${a.outages.length} event${a.outages.length>1?'s':''}`, table(['Start','End','Duration','Samples'],
-      a.outages.map(o=>[esc(fmtTime(o.start)),esc(fmtTime(o.end)),fmtDur(o.count*a.interval),o.count])));
+    const hasTrace = a.outages.some(o=>o.trace&&o.trace.length);
+    const oHead = ['Start','End','Duration','Samples']; if(hasTrace) oHead.push('Path at failure');
+    raw+=sec('OUTAGE LOG',`${a.outages.length} event${a.outages.length>1?'s':''}`, table(oHead,
+      a.outages.map(o=>{ const c=[esc(fmtTime(o.start)),esc(fmtTime(o.end)),fmtDur(o.count*a.interval),o.count];
+        if(hasTrace) c.push(o.trace&&o.trace.length?esc(o.trace.join(' > ')):'--'); return c; })));
+  }
+  if(a.gapList&&a.gapList.length){
+    raw+=sec('NO-DATA GAPS',`${a.gapList.length} gap${a.gapList.length>1?'s':''} (machine asleep or off)`, table(['Last sample before gap','Missing'],
+      a.gapList.map(g=>[esc(fmtTime(g.t)),fmtDur(g.dur)])));
+  }
+  if(a.wlanDiscs&&a.wlanDiscs.length){
+    raw+=sec('WI-FI DISCONNECT LOG',`${a.wlanDiscs.length} event${a.wlanDiscs.length>1?'s':''} (Windows WLAN-AutoConfig)`, table(['Time','Reason'],
+      a.wlanDiscs.slice(-100).map(e=>[esc(fmtTime(e.t)),esc(String(e.msg||'').replace(/^disconnect:?\s*/,'')||'unspecified')])));
   }
   raw+=sec('SESSION STATS','',
-    `<p class="line">uptime <b>${a.uptimePct.toFixed(2)}%</b> - offline <b>${fmtDur(a.totalDownSec)}</b> - avg latency <b>${a.avgLat!=null?a.avgLat.toFixed(0)+' ms':'--'}</b> - p95 <b>${a.p95!=null?a.p95+' ms':'--'}</b> - spikes <b>${a.spikes}</b></p>`+
+    `<p class="line">uptime <b>${a.uptimePct.toFixed(2)}%</b> - offline <b>${fmtDur(a.totalDownSec)}</b>${a.noDataSec>600?` - no data <b>${fmtDur(a.noDataSec)}</b>`:''} - avg latency <b>${a.avgLat!=null?a.avgLat.toFixed(0)+' ms':'--'}</b> - p95 <b>${a.p95!=null?a.p95+' ms':'--'}</b> - spikes <b>${a.spikes}</b></p>`+
+    (a.ethRows&&a.ethRows.length?`<p class="line">wired link: <b>${a.ethMax} Mbps</b>${a.ethDowngraded?` - <span style="color:var(--amber)">dropped to ${a.ethMin} Mbps (${a.ethShifts.length} change${a.ethShifts.length>1?'s':''})</span>`:''}</p>`:'')+
     (a.hasQ?`<p class="line">packet loss: <b>${a.lossTicks}</b> check(s) with loss - avg <b>${a.avgLoss!=null?a.avgLoss.toFixed(1):'0'}%</b> - peak <b>${a.maxLoss!=null?a.maxLoss:0}%</b> - jitter avg <b>${a.avgJit!=null?a.avgJit:'--'} ms</b> - peak <b>${a.maxJit!=null?a.maxJit:'--'} ms</b></p>`:'')+
     (a.gwUsable?`<p class="line">gateway ${esc(meta.gateway||'')}: reachable <b>${a.gwReachPct!=null?a.gwReachPct.toFixed(1)+'%':'--'}</b>${a.gwAvg!=null?` - avg <b>${a.gwAvg} ms</b>`:''} - drops-while-up <b>${a.gwDropWhileUp}</b></p>`
       :(meta.gateway?`<p class="line dim">gateway ${esc(meta.gateway)} never answered ping (blocks ICMP) - gateway-hop signal unavailable.</p>`:''))+
