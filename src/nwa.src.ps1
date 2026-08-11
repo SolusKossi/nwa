@@ -420,39 +420,219 @@ $stLastEvT = Get-Date
 $stRoams = 0; $stAps = New-Object System.Collections.Generic.HashSet[string]
 $stOutages = 0; $stDownSec = 0; $stWasDown = $false
 $stLoss = 0; $stJit = 0; $stDnsFail = 0
-$stLastEvent = '-'
+$stEvents = New-Object System.Collections.Generic.List[string]
 $stHist = ''
 $stLastTrace = [datetime]::MinValue
 $script:dashDrawn = $false
+$script:lastRows = 0
 
 function Format-Elapsed([timespan]$ts){
   if ($ts.TotalHours -ge 1) { return ('{0}h {1:d2}m' -f [int][math]::Floor($ts.TotalHours), $ts.Minutes) }
   return ('{0:d2}:{1:d2}' -f $ts.Minutes, $ts.Seconds)
 }
+function Add-Ev([string]$s){ $stEvents.Add($s); while ($stEvents.Count -gt 3) { $stEvents.RemoveAt(0) } }
+
+# --- dashboard rendering ---
+$script:NwaLogo = @(
+  ' _  _ __      ___   ',
+  '| \| |\ \    / /_\  ',
+  '| .` | \ \/\/ / _ \ ',
+  '|_|\_|  \_/\_/_/ \_\'
+)
+$script:NwaTag = 'network analysis - github.com/SolusKossi/nwa'
+
+# a "row" is a list of segments; a segment is @(text, consoleColor)
+function New-Box([string]$title,$rows,[int]$w){
+  $inner = $w - 4
+  $out = New-Object System.Collections.Generic.List[object]
+  $t = '+-- ' + $title + ' '
+  $head = New-Object System.Collections.Generic.List[object]
+  $head.Add(@($t,'Cyan'))
+  $head.Add(@((('-' * [math]::Max(0,$w - $t.Length - 1)) + '+'),'DarkGray'))
+  $out.Add($head)
+  foreach($r in $rows){
+    $line = New-Object System.Collections.Generic.List[object]
+    $line.Add(@('| ','DarkGray'))
+    $len = 0
+    foreach($s in $r){
+      $txt = [string]$s[0]
+      if ($len -ge $inner) { break }
+      if ($len + $txt.Length -gt $inner) { $txt = $txt.Substring(0, $inner - $len) }  # clip to box
+      $line.Add(@($txt, $s[1]))
+      $len += $txt.Length
+    }
+    $line.Add(@(((' ' * [math]::Max(0,$inner - $len)) + ' |'),'DarkGray'))
+    $out.Add($line)
+  }
+  $foot = New-Object System.Collections.Generic.List[object]
+  $foot.Add(@(('+' + ('-' * ($w-2)) + '+'),'DarkGray'))
+  $out.Add($foot)
+  return ,$out
+}
+function Join-BoxRows($left,$right,[int]$lw,[int]$gap){
+  $n = [math]::Max($left.Count,$right.Count)
+  $out = New-Object System.Collections.Generic.List[object]
+  for($i=0;$i -lt $n;$i++){
+    $row = New-Object System.Collections.Generic.List[object]
+    if($i -lt $left.Count){ foreach($s in $left[$i]){ $row.Add($s) } } else { $row.Add(@((' ' * $lw),'DarkGray')) }
+    $row.Add(@((' ' * $gap),'DarkGray'))
+    if($i -lt $right.Count){ foreach($s in $right[$i]){ $row.Add($s) } }
+    $out.Add($row)
+  }
+  return ,$out
+}
+function KV([string]$k,[string]$v,[string]$vc){
+  $r = New-Object System.Collections.Generic.List[object]
+  $r.Add(@($k.PadRight(9),'DarkGray')); $r.Add(@($v,$vc))
+  return ,$r
+}
+function KV2([string]$k1,[string]$v1,[string]$c1,[string]$k2,[string]$v2,[string]$c2,[int]$half){
+  $r = New-Object System.Collections.Generic.List[object]
+  $r.Add(@($k1.PadRight(9),'DarkGray'))
+  $r.Add(@($v1.PadRight([math]::Max($v1.Length + 2, $half - 9)),$c1))   # always at least 2 spaces before pair 2
+  $r.Add(@($k2.PadRight(9),'DarkGray'))
+  $r.Add(@($v2,$c2))
+  return ,$r
+}
+function HistSegs([string]$h){
+  $row = New-Object System.Collections.Generic.List[object]
+  if(-not $h){ $row.Add(@('-','DarkGray')); return ,$row }
+  $cur=''; $curC=''
+  foreach($ch in $h.ToCharArray()){
+    $c = 'DarkGray'
+    if($ch -eq '.'){ $c='DarkGreen' } elseif($ch -eq '!'){ $c='Yellow' } elseif($ch -eq 'x'){ $c='Red' }
+    if($c -ne $curC -and $cur){ $row.Add(@($cur,$curC)); $cur='' }
+    $cur += $ch; $curC = $c
+  }
+  if($cur){ $row.Add(@($cur,$curC)) }
+  return ,$row
+}
+function Write-SegRow($row,[int]$w){
+  $len = 0
+  foreach($s in $row){
+    $c = 'Gray'; if ($s.Count -gt 1 -and $s[1]) { $c = [string]$s[1] }
+    Write-Host ([string]$s[0]) -NoNewline -ForegroundColor $c
+    $len += ([string]$s[0]).Length
+  }
+  if($len -lt $w){ Write-Host (' ' * ($w - $len)) -NoNewline }
+  Write-Host ''
+}
 
 function Draw-Dash($d){
-  $w = 78
-  try { $w = [math]::Min(110, [math]::Max(64, [Console]::WindowWidth - 1)) } catch {}
+  $w = 90
+  try { $w = [math]::Min(110, [math]::Max(70, [Console]::WindowWidth - 1)) } catch {}
   try {
-    if (-not $script:dashDrawn) { Clear-Host; $script:dashDrawn = $true }
+    if (-not $script:dashDrawn) { try { Clear-Host } catch {}; $script:dashDrawn = $true }
     [Console]::SetCursorPosition(0,0)
   } catch { $script:dashDrawn = $true }
-  $pad = { param($s) $s = [string]$s; if ($s.Length -gt $w) { $s.Substring(0,$w) } else { $s.PadRight($w) } }
 
-  Write-Host (& $pad (' NWA MONITOR   ' + $env:COMPUTERNAME + '   ' + $d.elapsed + '   ' + $d.n + ' samples   [Q] stop + report')) -ForegroundColor Cyan
-  Write-Host (& $pad (' ' + ('-' * ($w-2))))
+  $rows = New-Object System.Collections.Generic.List[object]
+
+  # header: run info left, NWA logo + attribution right
+  $rw = $script:NwaTag.Length
+  $leftHead = @(
+    '',
+    (' NWA MONITOR   ' + $d.hostName),
+    (' up ' + $d.elapsed + '   ' + $d.n + ' samples   every ' + $d.interval + 's'),
+    ' [Q] stop and build report',
+    ''
+  )
+  for($i=0;$i -lt 5;$i++){
+    $r = New-Object System.Collections.Generic.List[object]
+    $lt = $leftHead[$i]
+    $r.Add(@($lt.PadRight([math]::Max(1,$w - $rw - 1)), $(if($i -eq 1){'White'}else{'DarkGray'})))
+    if($i -lt 4){ $r.Add(@($script:NwaLogo[$i].PadLeft($rw),'Cyan')) }
+    else        { $r.Add(@($script:NwaTag.PadLeft($rw),'DarkGray')) }
+    $rows.Add($r)
+  }
+  $blank = New-Object System.Collections.Generic.List[object]; $blank.Add(@(' ','DarkGray')); $rows.Add($blank)
+
+  # status colors
   $stCol = 'Green'; if ($d.state -eq 'DOWN') { $stCol = 'Red' } elseif ($d.state -ne 'ok') { $stCol = 'Yellow' }
-  Write-Host (' net    ') -NoNewline
-  Write-Host ($d.state.PadRight(6)) -NoNewline -ForegroundColor $stCol
-  Write-Host (& $pad ('ping ' + $d.ping + '   loss ' + $d.loss + '   jitter ' + $d.jit + '   dns ' + $d.dns)).Substring(0,$w-14)
-  Write-Host (& $pad (' link   ' + $d.link))
-  Write-Host (& $pad (' ap     ' + $d.ap + '   roams ' + $d.roams + '   aps seen ' + $d.aps))
-  Write-Host (& $pad (' sites  ' + $d.sites))
-  Write-Host (& $pad (' hist   [' + $d.hist + ']   . ok  ! degraded  x down'))
-  Write-Host (& $pad (' total  outages ' + $d.outages + ' (' + $d.downDur + ')   loss ticks ' + $d.lossN + '   jit>=30 ' + $d.jitN + '   dns fails ' + $d.dnsN))
-  Write-Host (& $pad (' event  ' + $d.lastEvent)) -ForegroundColor DarkGray
-  Write-Host (& $pad (' log    ' + $d.logPath)) -ForegroundColor DarkGray
+  $sigCol = 'Green'; if ($d.sigVal -ne $null) { if ($d.sigVal -lt 40) { $sigCol='Red' } elseif ($d.sigVal -lt 60) { $sigCol='Yellow' } }
+  $lossCol = $(if($d.lossVal -gt 0){'Yellow'}else{'Gray'})
+  $jitCol  = $(if($d.jitVal -ge 30){'Yellow'}else{'Gray'})
+  $dnsCol  = $(if($d.dns -eq 'FAIL'){'Red'}else{'Gray'})
+
+  $twoCol = ($w -ge 86)
+  $bw = $(if($twoCol){ [int](($w - 2) / 2) } else { $w })
+  $half = [int](($bw - 4) / 2)
+
+  # CONNECTION box
+  $cRows = @(
+    (KV2 'status' $d.state $stCol 'ping' $d.ping 'Gray' $half),
+    (KV2 'loss' $d.loss $lossCol 'jitter' $d.jit $jitCol $half),
+    (KV2 'dns' $d.dns $dnsCol 'gateway' $d.gw 'Gray' $half)
+  )
+  # LINK box
+  if($d.wifi){
+    $lRows = @(
+      (KV2 'ssid' $d.ssid 'White' 'signal' $d.sig $sigCol $half),
+      (KV2 'band' $d.band 'Gray' 'rate' $d.rate 'Gray' $half),
+      (KV 'ap' $d.ap 'Gray')
+    )
+  } else {
+    $lRows = @(
+      (KV 'link' $d.link 'White'),
+      (KV 'ap' '-' 'DarkGray'),
+      (KV ' ' ' ' 'DarkGray')
+    )
+  }
+  # SESSION box
+  $sRows = @(
+    (KV2 'outages' ($d.outages + ' (' + $d.downDur + ')') $(if($d.outagesN -gt 0){'Yellow'}else{'Gray'}) 'loss t.' $d.lossN $(if([int]$d.lossN -gt 0){'Yellow'}else{'Gray'}) $half),
+    (KV2 'jit>=30' $d.jitN $(if([int]$d.jitN -gt 0){'Yellow'}else{'Gray'}) 'dns fail' $d.dnsN $(if([int]$d.dnsN -gt 0){'Yellow'}else{'Gray'}) $half),
+    (KV2 'roams' ([string]$d.roams) $(if([int]$d.roams -gt 0){'Yellow'}else{'Gray'}) 'aps seen' ([string]$d.aps) 'Gray' $half)
+  )
+  # EVENTS box
+  $eRows = New-Object System.Collections.Generic.List[object]
+  if($d.events.Count -eq 0){
+    $r0 = New-Object System.Collections.Generic.List[object]; $r0.Add(@('no events yet','DarkGray')); $eRows.Add($r0)
+  }
+  foreach($ev in $d.events){
+    $re = New-Object System.Collections.Generic.List[object]; $re.Add(@([string]$ev,'Yellow')); $eRows.Add($re)
+  }
+  while($eRows.Count -lt 3){
+    $rb = New-Object System.Collections.Generic.List[object]; $rb.Add(@(' ','DarkGray')); $eRows.Add($rb)
+  }
+
+  if($twoCol){
+    foreach($r in (Join-BoxRows (New-Box 'CONNECTION' $cRows $bw) (New-Box 'LINK' $lRows $bw) $bw ($w - 2*$bw))){ $rows.Add($r) }
+    foreach($r in (Join-BoxRows (New-Box 'SESSION' $sRows $bw) (New-Box 'EVENTS' $eRows $bw) $bw ($w - 2*$bw))){ $rows.Add($r) }
+  } else {
+    foreach($b in @((New-Box 'CONNECTION' $cRows $bw),(New-Box 'LINK' $lRows $bw),(New-Box 'SESSION' $sRows $bw),(New-Box 'EVENTS' $eRows $bw))){
+      foreach($r in $b){ $rows.Add($r) }
+    }
+  }
+
+  # sites + history (full width)
+  if($d.sites -and $d.sites -ne '-'){
+    $sRow = New-Object System.Collections.Generic.List[object]
+    $sRow.Add(@(' sites    ','DarkGray')); $sRow.Add(@($d.sites,'Gray'))
+    $rows.Add($sRow)
+    $rows.Add($blank)
+  }
+  $histW = [math]::Max(20, $w - 12)
+  $hRow = New-Object System.Collections.Generic.List[object]
+  $hRow.Add(@(' history  [','DarkGray'))
+  foreach($s in (HistSegs ($d.hist.Substring([math]::Max(0,$d.hist.Length - $histW))))){ $hRow.Add($s) }
+  $hRow.Add(@(']','DarkGray'))
+  $rows.Add($hRow)
+  $lRow = New-Object System.Collections.Generic.List[object]
+  $lRow.Add(@('           ','DarkGray')); $lRow.Add(@('.','DarkGreen')); $lRow.Add(@(' ok   ','DarkGray'))
+  $lRow.Add(@('!','Yellow')); $lRow.Add(@(' degraded   ','DarkGray')); $lRow.Add(@('x','Red')); $lRow.Add(@(' down','DarkGray'))
+  $rows.Add($lRow)
+  $rows.Add($blank)
+  $pRow = New-Object System.Collections.Generic.List[object]
+  $pRow.Add(@((' log  ' + $d.logPath),'DarkGray'))
+  $rows.Add($pRow)
+
+  foreach($r in $rows){ Write-SegRow $r $w }
+  # clear leftover lines from a previous, taller frame
+  if($script:lastRows -gt $rows.Count){ for($i=$rows.Count;$i -lt $script:lastRows;$i++){ Write-Host (' ' * $w) } }
+  $script:lastRows = $rows.Count
 }
+# --- end dashboard rendering ---
 
 Write-Host ''
 Write-Host ("nwa monitor - every {0}s ({1} pings/target) - {2}" -f $IntervalSec, $PingCount, $stopMsg) -ForegroundColor Green
@@ -515,47 +695,51 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
   $loss = if ($i1) { $i1.loss } else { 100 }
   $jit  = if ($i1 -and $i1.jit -ne $null) { $i1.jit } else { 0 }
   if ($isDown) {
-    if (-not $stWasDown) { $stOutages++; $stLastEvent = $tickStart.ToString('HH:mm:ss') + ' DOWN' }
+    if (-not $stWasDown) { $stOutages++; Add-Ev ($tickStart.ToString('HH:mm:ss') + ' DOWN') }
     $stDownSec += $IntervalSec
-  } elseif ($stWasDown) { $stLastEvent = $tickStart.ToString('HH:mm:ss') + ' back up' }
+  } elseif ($stWasDown) { Add-Ev ($tickStart.ToString('HH:mm:ss') + ' back up') }
   $stWasDown = $isDown
   if (-not $isDown -and $loss -gt 0) { $stLoss++ }
   if (-not $isDown -and $jit -ge 30) { $stJit++ }
-  if ($tick.dns -lt 0) { $stDnsFail++; if (-not $isDown) { $stLastEvent = $tickStart.ToString('HH:mm:ss') + ' DNS failed' } }
+  if ($tick.dns -lt 0) { $stDnsFail++; if (-not $isDown) { Add-Ev ($tickStart.ToString('HH:mm:ss') + ' DNS failed') } }
   if ($w.bssid) {
-    if ($script:prevBssid -and $w.bssid -ne $script:prevBssid) { $stRoams++; $stLastEvent = $tickStart.ToString('HH:mm:ss') + ' roamed to ' + $w.bssid }
+    if ($script:prevBssid -and $w.bssid -ne $script:prevBssid) { $stRoams++; Add-Ev ($tickStart.ToString('HH:mm:ss') + ' roamed to ' + $w.bssid) }
     [void]$stAps.Add($w.bssid)
     $script:prevBssid = $w.bssid
   }
-  foreach ($e in $wev) { if ($e.id -eq 8003) { $stLastEvent = ([datetime]$e.t).ToString('HH:mm:ss') + ' ' + $e.msg } }
+  foreach ($e in $wev) { if ($e.id -eq 8003) { Add-Ev (([datetime]$e.t).ToString('HH:mm:ss') + ' ' + $e.msg) } }
 
   $state = if ($isDown) { 'DOWN' } elseif ($tick.dns -lt 0) { 'DNS!' } elseif ($loss -gt 0) { 'LOSS' } elseif ($jit -ge 30) { 'JIT' } else { 'ok' }
   $c = '.'; if ($state -eq 'DOWN') { $c = 'x' } elseif ($state -ne 'ok') { $c = '!' }
   $stHist += $c; if ($stHist.Length -gt 400) { $stHist = $stHist.Substring($stHist.Length - 400) }
 
   if ($interactive) {
-    $linkStr = 'no link'
-    if ($w.sig -ne $null) { $linkStr = ('{0}  {1} ch{2}  sig {3}%  rate {4} Mbps' -f $w.ssid, $w.band, $w.chan, $w.sig, $w.rx) }
-    elseif ($eth -ne $null) { $linkStr = ('wired  {0} Mbps' -f $eth) }
     $sitesStr = '-'
     if ($tick.http.Count) { $sitesStr = (@($tick.http | ForEach-Object { $h=[System.Uri]$_.u; $h.Host + ' ' + $(if ($_.ms -lt 0) { 'DOWN' } else { [string]$_.ms + 'ms' }) }) -join '   ') }
-    $histW = 44; try { $histW = [math]::Max(30,[math]::Min(80,[Console]::WindowWidth - 30)) } catch {}
     Draw-Dash @{
+      hostName = $env:COMPUTERNAME
+      interval = $IntervalSec
       elapsed = Format-Elapsed ((Get-Date) - $startT)
       n = $k
       state = $state
       ping = $(if ($tick.'1.1.1.1' -ge 0) { [string]$tick.'1.1.1.1' + ' ms' } else { '--' })
-      loss = ([string]$loss + '%')
-      jit  = ([string]$jit + ' ms')
+      loss = ([string]$loss + '%'); lossVal = $loss
+      jit  = ([string]$jit + ' ms'); jitVal = $jit
       dns  = $(if ($tick.dns -ge 0) { [string]$tick.dns + ' ms' } else { 'FAIL' })
-      link = $linkStr
+      gw   = $(if ($gateway) { $(if ($tick.gw -ge 0) { [string]$tick.gw + ' ms' } else { 'DOWN' }) } else { 'n/a' })
+      wifi = ($w.sig -ne $null)
+      ssid = $(if ($w.ssid) { $w.ssid } else { '-' })
+      sig  = $(if ($w.sig -ne $null) { [string]$w.sig + '%' } else { '-' }); sigVal = $w.sig
+      band = $(if ($w.band) { $w.band + '  ch' + $w.chan } else { '-' })
+      rate = $(if ($w.rx -ne $null) { [string]$w.rx + ' Mbps' } else { '-' })
+      link = $(if ($eth -ne $null) { 'wired  ' + $eth + ' Mbps' } else { 'no link' })
       ap   = $(if ($w.bssid) { $w.bssid } elseif ($bssidHidden) { 'hidden (Location off)' } else { '-' })
       roams = $stRoams; aps = $stAps.Count
       sites = $sitesStr
-      hist = $stHist.Substring([math]::Max(0,$stHist.Length - $histW))
-      outages = $stOutages; downDur = ([string]$stDownSec + 's')
-      lossN = $stLoss; jitN = $stJit; dnsN = $stDnsFail
-      lastEvent = $stLastEvent
+      hist = $stHist
+      outages = [string]$stOutages; outagesN = $stOutages; downDur = ([string]$stDownSec + 's')
+      lossN = [string]$stLoss; jitN = [string]$stJit; dnsN = [string]$stDnsFail
+      events = @($stEvents)
       logPath = $out
     }
   } else {
