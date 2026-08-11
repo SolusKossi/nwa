@@ -17,9 +17,11 @@ Options:
     -DurationHours 8     auto-stop (default: run until Q)
     -Report              generate the report without asking (scripted runs)
 
-The raw log (network-monitor.jsonl, on the Desktop) is written continuously,
-so nothing is lost if the machine dies. You can also drop a log onto
-index.html to analyze it in any browser - try it with sample-monitor.jsonl.
+The report opens from the Desktop. The raw log (network-monitor.jsonl) is
+written continuously to %LOCALAPPDATA%\nwa - deliberately outside
+OneDrive-synced folders, which lock and fork rapidly-changing files. You can
+also drop a log onto index.html to analyze it in any browser - try it with
+sample-monitor.jsonl.
 
 ## What it measures
 

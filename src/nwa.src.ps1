@@ -38,7 +38,20 @@ $script:hasResolve = [bool](Get-Command Resolve-DnsName -ErrorAction SilentlyCon
 # It is only ever written to an .html file - never executed as code.
 $NWA_B64 = '@@NWA_TEMPLATE_B64@@'
 
-if (-not $OutDir) { $OutDir = [Environment]::GetFolderPath('Desktop') }
+# Where files go. The LOG is appended every few seconds, so it must NOT live in a
+# OneDrive/Dropbox-synced folder (sync engines lock and fork rapidly-changing files
+# - that is exactly what produced empty reports from a synced Desktop). The report
+# is a single write at the end, so the Desktop is fine for it.
+if ($OutDir) { $LogDir = $OutDir; $ReportDir = $OutDir }
+else {
+  $LogDir = Join-Path $env:LOCALAPPDATA 'nwa'
+  $ReportDir = [Environment]::GetFolderPath('Desktop')
+}
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+# every line written to the log is also kept in memory; the report is built from
+# memory so a sync engine mangling the log file cannot produce an empty report
+$script:logLines = New-Object System.Collections.Generic.List[string]
+
 $targets = @('1.1.1.1','8.8.8.8')
 $dnsHost = 'google.com'
 $httpTargets = @(foreach ($s in $Sites) { $s = $s.Trim(); if ($s) { if ($s -match '^https?://') { $s } else { 'https://' + $s } } })
@@ -167,16 +180,16 @@ function Test-Sites([string[]]$urls){
   })
 }
 
-# build network-report.html from a log file (data injected into the embedded template)
-function New-NwaReport([string]$dataPath,[bool]$IsJsonl,[bool]$OpenIt){
+# build network-report.html from the in-memory data lines (never re-reads the log file)
+function New-NwaReport([string[]]$jsonLines,[bool]$OpenIt){
   if ($NWA_B64 -like '@@*') { Write-Host 'No report template embedded (source build) - run build.ps1 first.' -ForegroundColor DarkYellow; return $null }
+  if (-not $jsonLines -or $jsonLines.Count -eq 0) { Write-Host 'No data captured - report skipped.' -ForegroundColor DarkYellow; return $null }
   try {
     $tpl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($NWA_B64))
-    if ($IsJsonl) { $arr = '[' + ((Get-Content $dataPath) -join ',') + ']' }
-    else          { $arr = '[' + (Get-Content $dataPath -Raw) + ']' }
+    $arr = '[' + ($jsonLines -join ',') + ']'
     $arr = $arr.Replace('</','<\/')   # keep '</script>' inside logged strings from breaking the page
     $html = $tpl.Replace('window.NWA_EMBEDDED = window.NWA_EMBEDDED || null;', 'window.NWA_EMBEDDED = ' + $arr + ';')
-    $rp = Join-Path $OutDir 'network-report.html'
+    $rp = Join-Path $ReportDir 'network-report.html'
     Set-Content -Path $rp -Value $html -Encoding utf8
     Write-Host ('Report: ' + $rp) -ForegroundColor Green
     if ($OpenIt) { Start-Process $rp }
@@ -371,19 +384,20 @@ if ($Snapshot) {
       }
     })
 
-  $outPath = Join-Path $OutDir 'network-report.json'
+  $outPath = Join-Path $LogDir 'network-report.json'
   $snapData | ConvertTo-Json -Depth 8 | Out-File -FilePath $outPath -Encoding utf8
   Write-Host ('Data: ' + $outPath) -ForegroundColor Green
   $interactive = $true
   try { $interactive = ($Host.Name -eq 'ConsoleHost') -and -not [Console]::IsInputRedirected } catch { $interactive = $false }
-  New-NwaReport $outPath $false ($interactive -or $Report) | Out-Null
+  $compact = $snapData | ConvertTo-Json -Compress -Depth 8
+  New-NwaReport @($compact) ($interactive -or $Report) | Out-Null
   return
 }
 
 # ============================================================
 #  MONITOR MODE
 # ============================================================
-$out = Join-Path $OutDir 'network-monitor.jsonl'
+$out = Join-Path $LogDir 'network-monitor.jsonl'
 
 $meta = [ordered]@{
   schema          = 'nwa-monitor/1'
@@ -402,7 +416,9 @@ $meta = [ordered]@{
   bssidHidden     = $bssidHidden
   httpTargets     = $httpTargets
 }
-Set-Content -Path $out -Value ($meta | ConvertTo-Json -Compress) -Encoding utf8
+$metaJson = $meta | ConvertTo-Json -Compress
+$script:logLines.Add($metaJson)
+Set-Content -Path $out -Value $metaJson -Encoding utf8
 
 $interactive = $true
 try { $interactive = ($Host.Name -eq 'ConsoleHost') -and -not [Console]::IsInputRedirected } catch { $interactive = $false }
@@ -688,7 +704,9 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
     $stLastTrace = Get-Date
   }
 
-  Add-Content -Path $out -Value ($tick | ConvertTo-Json -Compress -Depth 6) -Encoding utf8
+  $tickJson = $tick | ConvertTo-Json -Compress -Depth 6
+  $script:logLines.Add($tickJson)
+  Add-Content -Path $out -Value $tickJson -Encoding utf8
 
   # ---------- session stats + status ----------
   $i1 = $q['1.1.1.1']
@@ -772,4 +790,4 @@ if ($interactive -and -not $Report) {
   $ans = Read-Host 'Generate HTML report and open it? [Y/n]'
   if ($ans -eq '' -or $ans -match '^[yYjJ]') { $doReport = $true }
 }
-if ($doReport) { New-NwaReport $out $true $interactive | Out-Null }
+if ($doReport) { New-NwaReport @($script:logLines) $interactive | Out-Null }
