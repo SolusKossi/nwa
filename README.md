@@ -20,8 +20,8 @@ Options:
 The report opens from the Desktop. The raw log (network-monitor.jsonl) is
 written continuously to %LOCALAPPDATA%\nwa - deliberately outside
 OneDrive-synced folders, which lock and fork rapidly-changing files. You can
-also drop a log onto index.html to analyze it in any browser - try it with
-sample-monitor.jsonl.
+also drop logs onto index.html to analyze them in any browser (drop two to
+compare machines side by side) - try it with sample-monitor.jsonl.
 
 ## What it measures
 

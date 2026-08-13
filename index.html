@@ -7,47 +7,34 @@
 <title>Network Analysis</title>
 <style>
   :root{
-    /* semantic colors used by the render code's inline styles (kept, remapped to a light theme) */
-    --p:#15803d;            /* "good" emphasis (was phosphor green) */
-    --p-dim:#6b7280;        /* muted/secondary text */
-    --p-glow:transparent;
-    --amber:#b45309;
-    --red:#dc2626;
-    --blue:#2563eb;
+    --p:#15803d; --p-dim:#6b7280; --p-glow:transparent;
+    --amber:#b45309; --red:#dc2626; --blue:#2563eb;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-    /* app tokens */
     --bg:#f4f5f7; --card:#ffffff; --line:#e5e7eb; --text:#111827; --muted:#6b7280;
     --primary:#2563eb; --primary-d:#1d4ed8;
     --ok:#16a34a; --ok-bg:#ecfdf3; --ok-bd:#bbf7d0;
     --warn:#d97706; --warn-bg:#fffbeb; --warn-bd:#fde68a;
     --bad:#dc2626; --bad-bg:#fef2f2; --bad-bd:#fecaca;
+    --run0:#3b82f6; --run1:#f59e0b; --run2:#10b981; --run3:#a855f7;
   }
   *{box-sizing:border-box}
-  html{scrollbar-gutter:stable}
+  html{scrollbar-gutter:stable;scroll-behavior:smooth}
   body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden;
     font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
   a{color:var(--primary)}
 
-  /* app bar + container */
   .appbar{background:var(--card);border-bottom:1px solid var(--line)}
-  .appbar-inner{max-width:1080px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .appbar-inner{max-width:1120px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
   .theme-toggle{flex:none;border:1px solid var(--line);background:var(--bg);color:var(--text);
     font:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer}
   .theme-toggle:hover{border-color:var(--muted)}
   .brand{font-size:18px;font-weight:700;letter-spacing:-.01em}
   .brand-sub{font-size:13px;color:var(--muted);margin-top:2px}
-  .container{max-width:1080px;margin:0 auto;padding:24px 20px 90px}
-
-  /* tabs (mode toggle) */
-  .tabs{display:inline-flex;background:#eceef2;border-radius:10px;padding:4px;gap:4px;margin:0 0 20px}
-  .tab{border:0;background:transparent;color:var(--muted);font:inherit;font-weight:600;font-size:14px;
-    padding:8px 20px;border-radius:7px;cursor:pointer}
-  .tab.active{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .container{max-width:1120px;margin:0 auto;padding:24px 20px 90px}
 
   .intro{color:#374151;margin:0 0 20px;max-width:74ch}
   .intro:empty{display:none}
 
-  /* cards */
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:0 0 18px;
     box-shadow:0 1px 2px rgba(16,24,40,.04)}
   .card-title{font-size:16px;font-weight:650;margin:0 0 6px;display:flex;align-items:center;gap:10px}
@@ -59,7 +46,6 @@
   .note{color:var(--muted);font-size:13px;margin:12px 0 0;line-height:1.65}
   kbd{font-family:var(--mono);font-size:12px;background:#f3f4f6;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px}
 
-  /* code block */
   .cmdwrap{position:relative;margin:10px 0 14px}
   .cmd{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0;
     font-family:var(--mono);font-size:12.5px;line-height:1.5;color:#334155;
@@ -69,16 +55,14 @@
   .cmd-copy:hover{background:#f3f4f6}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:4px}
 
-  /* buttons */
   .btn{font:inherit;font-weight:600;font-size:14px;cursor:pointer;border:1px solid var(--line);
     background:#fff;color:#111827;padding:9px 16px;border-radius:9px}
   .btn:hover{background:#f9fafb}
   .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
   .btn.primary:hover{background:var(--primary-d)}
-  .btn.amber{}
   .btn.sm{font-size:13px;padding:6px 12px}
+  .btn.on{border-color:var(--primary);color:var(--primary)}
 
-  /* dropzone */
   #drop{border:2px dashed #cbd5e1;border-radius:12px;padding:30px;text-align:center;cursor:pointer;
     background:#fafbfc;transition:.15s;display:flex;flex-direction:column;gap:6px;align-items:center}
   #drop:hover,#drop.hot{border-color:var(--primary);background:#eff6ff}
@@ -86,7 +70,6 @@
   .drop-icon{font-size:28px;color:var(--primary);line-height:1}
   .err{color:var(--bad);font-size:13.5px;margin-top:10px;font-weight:500}
 
-  /* sections */
   .sec{margin:24px 0}
   .sec-h{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;text-transform:uppercase;
     letter-spacing:.04em;color:#374151;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
@@ -94,17 +77,18 @@
   .sec-h .tag{margin-left:auto;font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted);font-size:12px}
   p.line{margin:6px 0;font-size:14px}
   p.dim{color:var(--muted)}
+  .empty{color:var(--muted);font-size:13.5px;background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:12px 14px}
 
-  /* verdict */
-  .verdict{display:flex;align-items:center;gap:16px;border:1px solid;border-radius:14px;padding:18px 20px;margin:0 0 16px}
+  .verdict{display:flex;align-items:flex-start;gap:16px;border:1px solid;border-radius:14px;padding:18px 20px;margin:0 0 16px}
   .verdict .ic{font-size:22px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;color:#fff}
   .verdict .big{font-size:20px;font-weight:700;letter-spacing:-.01em}
   .verdict .small{font-size:13px;color:var(--muted);margin-top:2px}
+  .verdict .story{font-size:14px;margin-top:10px;line-height:1.6;color:var(--text)}
+  .verdict .acts{margin:10px 0 0;padding:0 0 0 18px;font-size:13.5px;line-height:1.7}
   .v-ok{background:var(--ok-bg);border-color:var(--ok-bd)} .v-ok .ic{background:var(--ok)} .v-ok .big{color:#166534}
   .v-warn{background:var(--warn-bg);border-color:var(--warn-bd)} .v-warn .ic{background:var(--warn)} .v-warn .big{color:#92400e}
   .v-bad{background:var(--bad-bg);border-color:var(--bad-bd)} .v-bad .ic{background:var(--bad)} .v-bad .big{color:#991b1b}
 
-  /* at-a-glance checks */
   .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 8px}
   .chk{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
   .chk .cl{font-size:12px;color:var(--muted);font-weight:500}
@@ -114,9 +98,10 @@
   .chk.warn .cv::before{background:var(--warn)} .chk.warn{border-color:var(--warn-bd)}
   .chk.bad .cv::before{background:var(--bad)} .chk.bad{border-color:var(--bad-bd)}
 
-  /* findings */
   .prob{display:flex;gap:12px;padding:14px 16px;border-radius:12px;margin:0 0 10px;
-    border:1px solid var(--line);background:var(--card);align-items:flex-start;font-size:14px;line-height:1.5}
+    border:1px solid var(--line);background:var(--card);align-items:flex-start;font-size:14px;line-height:1.5;cursor:pointer}
+  .prob:hover{filter:brightness(1.03)}
+  .prob.focus{outline:2px solid var(--primary);outline-offset:1px}
   .prob .pt{flex:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
     padding:3px 10px;border-radius:20px;color:#fff;margin-top:1px}
   .prob.bad{border-color:var(--bad-bd);background:var(--bad-bg)} .prob.bad .pt{background:var(--bad)}
@@ -127,8 +112,8 @@
     border:1px solid var(--line);border-radius:6px;padding:1px 8px;margin-left:4px;white-space:nowrap}
   .pfix{margin-top:9px;font-size:13.5px;color:#1e3a8a;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:9px 11px}
   .pfix::before{content:"Suggested fix - ";font-weight:700}
+  .occ{margin-top:8px;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
 
-  /* connectivity / service timeline */
   .timeline{display:flex;gap:1px;height:40px;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:10px 0 6px;background:#eef1f5}
   .tcol{flex:1 1 0;min-width:1px}
   .t-ok{background:#22c55e} .t-warn{background:#f59e0b} .t-bad{background:#ef4444} .t-gap{background:#c2c8d1}
@@ -136,11 +121,49 @@
   .tleg{display:flex;gap:18px;font-size:12px;color:var(--muted);margin:8px 0 0;flex-wrap:wrap}
   .tleg i{font-style:normal;display:inline-flex;align-items:center;gap:6px}
   .tleg b{width:11px;height:11px;border-radius:3px;display:inline-block}
-  .chart{width:100%;height:150px;border:1px solid var(--line);border-radius:8px;background:#fff;display:block}
-  .chart path.lat{fill:none;stroke:var(--primary);stroke-width:1.5}
-  .chart-x{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);margin:6px 0 0}
 
-  /* tables (raw drawer) - vertical scroll only, cells wrap, never scroll sideways */
+  /* canvas charts */
+  .stripwrap{position:relative;margin:10px 0 4px}
+  .strip{display:block;width:100%;height:38px;border:1px solid var(--line);border-radius:8px;background:#eef1f5;cursor:crosshair}
+  [data-theme="dark"] .strip{background:#1f2430}
+  .brushhint{font-size:12px;color:var(--muted);margin:6px 0 0}
+  .chartwrap{position:relative;margin:12px 0 0}
+  .chartwrap canvas.base{display:block;width:100%;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+  .chartwrap canvas.ovl{position:absolute;left:0;top:0;width:100%;pointer-events:none}
+  .chartlbl{position:absolute;left:10px;top:6px;font-size:11.5px;font-weight:600;color:var(--muted);pointer-events:none}
+  .readout{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:8px 0 0;min-height:18px;white-space:nowrap;overflow:hidden}
+  .axis{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:4px 0 0}
+
+  /* heatmap */
+  .hm{display:grid;grid-auto-rows:16px;gap:2px;margin:8px 0 4px}
+  .hmrow{display:contents}
+  .hmlbl{font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center;white-space:nowrap;padding-right:6px}
+  .hmc{border-radius:3px;background:#e5e7eb}
+  [data-theme="dark"] .hmc{background:#262b36}
+  .hm-ok{background:#22c55e} .hm-w1{background:#fbbf24} .hm-w2{background:#f59e0b} .hm-bad{background:#ef4444} .hm-gap{background:#c2c8d1}
+  [data-theme="dark"] .hm-gap{background:#4b5563}
+  .hmx{display:grid;gap:2px;font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+  .hmx span{text-align:center}
+
+  /* compare */
+  .runchip{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:13px}
+  .runchip b{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .delta td.win{color:var(--ok);font-weight:700}
+  .delta td.lose{color:var(--bad);font-weight:700}
+  .runhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:34px 0 12px;padding:10px 14px;
+    background:var(--card);border:1px solid var(--line);border-left-width:5px;border-radius:10px;font-size:14px}
+  .runhead .vp{margin-left:auto;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;color:#fff}
+  .vp.ok{background:var(--ok)} .vp.warn{background:var(--warn)} .vp.bad{background:var(--bad)}
+
+  /* sticky bar */
+  #sticky{position:sticky;top:0;z-index:50;display:none;background:var(--card);border-bottom:1px solid var(--line);
+    box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  #sticky .in{max-width:1120px;margin:0 auto;padding:8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #sticky .nav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+  #sticky .nav a{font-size:12.5px;font-weight:600;color:var(--muted);text-decoration:none;padding:5px 9px;border-radius:7px}
+  #sticky .nav a:hover{background:var(--bg);color:var(--text)}
+
+  /* tables */
   .scroll{overflow-y:auto;overflow-x:hidden;border:1px solid var(--line);border-radius:10px;max-height:360px}
   table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--mono);table-layout:fixed}
   th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);
@@ -161,7 +184,6 @@
   details>summary::before{content:"\25B8  ";color:var(--muted)}
   details[open]>summary::before{content:"\25BE  "}
 
-  /* readouts (snapshot summary) */
   .rds{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2px 28px}
   .rd{display:flex;align-items:baseline;font-size:14px;padding:6px 0;border-bottom:1px solid #f1f3f5}
   .rd .k{color:var(--muted);font-size:13px}
@@ -169,10 +191,18 @@
   .rd .v{font-weight:650}
   .rd .v small{color:var(--muted);font-weight:400}
 
+  /* samples toolbar */
+  .tbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+  .tbar select,.tbar input{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;
+    padding:6px 10px;background:var(--card);color:var(--text)}
+  .tbar input{min-width:180px}
+  .pgr{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);margin:10px 0 0}
+
   #out{display:none}
   .resetbar{display:flex;align-items:center;gap:12px;margin:0 0 16px;color:var(--muted);font-size:13px;flex-wrap:wrap}
 
-  /* ---------- dark theme (default) ---------- */
+  @media print{ #sticky,.resetbar,.tbar,.pgr,.appbar .theme-toggle{display:none !important} details{open:true} }
+
   [data-theme="dark"]{
     --bg:#0f1115; --card:#171a21; --line:#262b36; --text:#e6e8eb; --muted:#9aa3af;
     --primary:#3b82f6; --primary-d:#2563eb;
@@ -181,8 +211,6 @@
     --bad:#ef4444; --bad-bg:#2a1616; --bad-bd:#5a2424;
     --p:#4ade80; --p-dim:#9aa3af; --amber:#fbbf24; --red:#f87171; --blue:#60a5fa;
   }
-  [data-theme="dark"] .tabs{background:#1f2430}
-  [data-theme="dark"] .tab.active{box-shadow:0 1px 2px rgba(0,0,0,.4)}
   [data-theme="dark"] .card{box-shadow:none}
   [data-theme="dark"] .card-title .tag{background:#1f2430}
   [data-theme="dark"] kbd{background:#1f2430}
@@ -199,7 +227,6 @@
   [data-theme="dark"] .when{background:#1f2430;color:#d1d5db}
   [data-theme="dark"] .pfix{background:#10243f;border-color:#1e3a5f;color:#bcd4f5}
   [data-theme="dark"] .timeline{background:#1f2430}
-  [data-theme="dark"] .chart{background:#0e1117}
   [data-theme="dark"] th{background:#1f2430;color:#cbd5e1}
   [data-theme="dark"] tbody tr:hover td{background:#1f2430}
   [data-theme="dark"] .pill.up{color:#4ade80} [data-theme="dark"] .pill.down{color:#f87171}
@@ -221,6 +248,16 @@
   </div>
 </header>
 
+<div id="sticky"><div class="in">
+  <span id="stickyVerdicts"></span>
+  <button class="btn sm" onclick="newScan()">Back</button>
+  <button class="btn sm" onclick="addFilePick()">Add log</button>
+  <button class="btn sm" onclick="copySummary(this)">Copy summary</button>
+  <button class="btn sm" id="anonBtn" onclick="toggleAnon()">Anonymize</button>
+  <button class="btn sm" onclick="exportReport()">Export</button>
+  <span class="nav" id="stickyNav"></span>
+</div></div>
+
 <main class="container" id="screen">
   <div id="main">
     <div id="intake">
@@ -237,12 +274,12 @@ powershell -ep bypass -f .\nwa.ps1</pre>
       </section>
 
       <section class="card">
-        <h2 class="card-title"><span class="step-num">2</span> Or drop a log here</h2>
+        <h2 class="card-title"><span class="step-num">2</span> Or drop logs here</h2>
         <div id="drop">
           <div class="drop-icon">&#8595;</div>
-          <strong id="dropLabel">Drop network-monitor.jsonl or network-report.json here</strong>
-          <span class="muted">or click to browse - analyzed locally in your browser</span>
-          <input type="file" id="file" accept=".json,.jsonl,application/json,text/plain" hidden>
+          <strong id="dropLabel">Drop one or more logs here</strong>
+          <span class="muted">network-monitor.jsonl or network-report.json - drop two to compare - analyzed locally</span>
+          <input type="file" id="file" accept=".json,.jsonl,application/json,text/plain" multiple hidden>
         </div>
         <div class="err" id="loadErr"></div>
       </section>
@@ -255,17 +292,24 @@ powershell -ep bypass -f .\nwa.ps1</pre>
 <script>
 const $ = s => document.querySelector(s);
 
-/* ---------- theme (dark by default) ---------- */
+/* ---------- state ---------- */
+let RUNS = [];            // {kind:'monitor'|'snapshot', name, meta, ticks, a}  (a = analysis for monitor)
+let ANON = false;
+const ANONMAP = { host:{}, ssid:{}, bssid:{}, nHost:0, nSsid:0, nBssid:0 };
+let FOCUS = null;         // {run, finding} - clicked finding
+
+/* ---------- theme ---------- */
 function applyTheme(t){
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('nwa-theme', t); } catch(e){}
   const b = document.getElementById('themeToggle');
   if(b) b.textContent = (t==='dark') ? 'Light mode' : 'Dark mode';
+  if(RUNS.length) drawAllCharts();   // canvas colors follow theme
 }
 function toggleTheme(){ applyTheme(document.documentElement.dataset.theme==='dark' ? 'light' : 'dark'); }
 applyTheme(document.documentElement.dataset.theme || 'dark');
 
-/* ---------- copy the run commands ---------- */
+/* ---------- intake ---------- */
 $('#cmdCopy').onclick = async () => {
   const txt = $('#cmdPreview').textContent;
   try { await navigator.clipboard.writeText(txt); flash('Copied - paste into PowerShell'); }
@@ -276,98 +320,120 @@ function flash(m){ const e=$('#copyState'); if(e){ e.textContent=' '+m; setTimeo
 function selectText(el){ const r=document.createRange(); r.selectNodeContents(el);
   const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
 
-/* ---------- ingest ---------- */
 const drop=$('#drop'), fileInput=$('#file');
 drop.onclick=()=>fileInput.click();
-fileInput.onchange=e=>{ if(e.target.files[0]) read(e.target.files[0]); };
+fileInput.onchange=e=>{ readFiles([...e.target.files]); fileInput.value=''; };
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
-drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) read(f); });
+drop.addEventListener('drop',e=>{ readFiles([...e.dataTransfer.files]); });
+function addFilePick(){ fileInput.click(); }
 
 function fail(err){ $('#loadErr').textContent='Couldn\'t read that file: '+err.message; console.error(err); }
-function read(file){
+function readFiles(files){
   $('#loadErr').textContent='';
-  const fr=new FileReader();
-  fr.onload=()=>{
-    const text=fr.result;
-    // 1) try whole-file JSON (snapshot)
-    let obj=null; try{ obj=JSON.parse(text); }catch(_){}
-    if(obj && typeof obj==='object' && typeof obj.schema==='string' && obj.schema.indexOf('nwa-report')===0){
-      try{ render(obj); }catch(err){ fail(err); } return;
-    }
-    // 2) try JSONL (monitor log)
-    const objs=[];
-    text.split(/\r?\n/).forEach(ln=>{ ln=ln.trim(); if(!ln) return; try{ objs.push(JSON.parse(ln)); }catch(_){} });
-    if(objs.length && objs[0] && objs[0].schema==='nwa-monitor/1'){
-      try{ renderMonitor(objs[0], objs.slice(1)); }catch(err){ fail(err); } return;
-    }
-    // 3) fallback: a JSON object with the wrong schema -> try snapshot
-    if(obj && typeof obj==='object'){
-      $('#loadErr').textContent='Unrecognized format - reading it as a snapshot.';
-      try{ render(obj); }catch(err){ fail(err); } return;
-    }
-    $('#loadErr').textContent='That doesn\'t look like a network-report.json or network-monitor.jsonl file.';
-  };
-  fr.readAsText(file);
+  if(!files.length) return;
+  let left=files.length;
+  files.forEach(f=>{
+    const fr=new FileReader();
+    fr.onload=()=>{ try{ addRunFromText(fr.result, f.name); }catch(err){ fail(err); }
+      if(--left===0){ try{ renderAll(); }catch(err){ fail(err); } } };
+    fr.readAsText(f);
+  });
+}
+function addRunFromText(text, name){
+  let obj=null; try{ obj=JSON.parse(text); }catch(_){}
+  if(obj && typeof obj==='object' && !Array.isArray(obj)){
+    RUNS.push({kind:'snapshot', name, data:obj});
+    if(!(typeof obj.schema==='string' && obj.schema.indexOf('nwa-report')===0))
+      $('#loadErr').textContent='Unrecognized format in '+name+' - reading it as a snapshot.';
+    return;
+  }
+  if(Array.isArray(obj) && obj.length){          // embedded-style array
+    const m=obj[0]||{};
+    if(String(m.schema||'').indexOf('nwa-monitor')===0){ pushMonitor(name,m,obj.slice(1)); return; }
+    RUNS.push({kind:'snapshot', name, data:m}); return;
+  }
+  const objs=[];
+  text.split(/\r?\n/).forEach(ln=>{ ln=ln.trim(); if(!ln) return; try{ objs.push(JSON.parse(ln)); }catch(_){} });
+  if(objs.length && objs[0] && objs[0].schema==='nwa-monitor/1'){ pushMonitor(name,objs[0],objs.slice(1)); return; }
+  throw new Error(name+' does not look like an nwa log');
+}
+function pushMonitor(name,meta,ticks){
+  RUNS.push({kind:'monitor', name, meta, ticks, a:analyzeMonitor(meta,ticks), view:null});
 }
 function newScan(){
+  RUNS=[]; FOCUS=null;
   $('#out').style.display='none'; $('#out').innerHTML='';
+  $('#sticky').style.display='none';
   $('#intake').style.display=''; $('#loadErr').textContent='';
   window.scrollTo({top:0,behavior:'smooth'});
 }
-// export the current results as a single self-contained HTML file (shareable, works offline)
-function exportReport(){
-  const theme=document.documentElement.dataset.theme||'dark';
-  const css=document.querySelector('style').textContent;
-  const out=$('#out').cloneNode(true);
-  out.querySelectorAll('.resetbar .btn').forEach(b=>b.remove());   // drop interactive buttons
-  out.querySelectorAll('details').forEach(d=>d.setAttribute('open','')); // expand drawers for print/share
-  const html='<!doctype html><html lang="en" data-theme="'+theme+'"><head><meta charset="utf-8">'
-    +'<meta name="viewport" content="width=device-width, initial-scale=1"><title>Network report</title>'
-    +'<style>'+css+'</style></head><body><main class="container" style="padding-top:24px">'
-    +out.innerHTML+'</main></body></html>';
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
-  a.download='network-report.html'; a.click(); URL.revokeObjectURL(a.href);
+
+/* ---------- anonymize ---------- */
+function toggleAnon(){ ANON=!ANON; const b=$('#anonBtn'); if(b) b.classList.toggle('on',ANON); renderAll(); }
+function pv(type,val){
+  if(!ANON || val==null || val==='' ) return val;
+  const m=ANONMAP;
+  if(type==='host'){ if(!m.host[val]) m.host[val]='PC-'+String.fromCharCode(65+(m.nHost++)); return m.host[val]; }
+  if(type==='ssid'){ if(!m.ssid[val]) m.ssid[val]='WIFI-'+(++m.nSsid); return m.ssid[val]; }
+  if(type==='bssid'){ if(!m.bssid[val]) m.bssid[val]='AP-'+(++m.nBssid); return m.bssid[val]; }
+  if(type==='ip') return 'x.x.x.x';
+  if(type==='user') return 'user';
+  return val;
 }
 
-/* ---------- helpers ---------- */
+/* ---------- shared helpers ---------- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const bytes=n=>{ if(n==null) return '--'; const u=['B','KB','MB','GB','TB']; let i=0,x=Number(n);
   while(x>=1024&&i<u.length-1){x/=1024;i++;} return x.toFixed(x<10&&i>0?1:0)+' '+u[i]; };
 const num=(n,d=0)=> n==null?'--':Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
-function sec(title,tag,inner){
-  return `<div class="sec"><div class="sec-h">${esc(title)}<span class="rule"></span>${tag?`<span class="tag">${esc(tag)}</span>`:''}</div>${inner}</div>`;
+function sec(title,tag,inner,id){
+  return `<div class="sec"${id?` id="${id}"`:''}><div class="sec-h">${esc(title)}<span class="rule"></span>${tag?`<span class="tag">${esc(tag)}</span>`:''}</div>${inner}</div>`;
 }
 function table(headers,rows){
   if(!rows.length) return `<p class="line dim">no entries</p>`;
   return `<div class="scroll"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
     <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+function pctl(arr,p){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>x-y);
+  const i=Math.min(a.length-1, Math.floor(p/100*a.length)); return a[i]; }
+function fmtDur(sec){ sec=Math.round(sec); if(sec<60) return sec+'s';
+  const m=Math.floor(sec/60), s=sec%60; if(m<60) return s?`${m}m ${s}s`:`${m}m`;
+  const h=Math.floor(m/60), mm=m%60; return mm?`${h}h ${mm}m`:`${h}h`; }
+function clock(t){ try{ return new Date(t).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }catch{ return ''; } }
+function whenLabel(times){ times=(times||[]).filter(Boolean); if(!times.length) return null;
+  if(times.length===1) return 'at '+clock(times[0]);
+  return `first ${clock(times[0])}, last ${clock(times[times.length-1])} (${times.length}x)`; }
+function fmtDate(s){ try{ return new Date(s).toLocaleString(); }catch{ return s||''; } }
+function fmtTime(s){ try{ const d=new Date(s);
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }
+  catch{ return s||''; } }
+function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch{ return String(u); } }
+const HTTP_SLOW=1500;
 
-/* ---------- DIAGNOSIS ENGINE ---------- */
-// shared DNS helpers (used by snapshot + monitor)
+/* ---------- DNS advice (shared) ---------- */
 const PUBLIC_DNS=/^(1\.1\.1\.1|1\.0\.0\.1|8\.8\.8\.8|8\.8\.4\.4|9\.9\.9\.9|149\.112\.112\.112|208\.67\.222\.222|208\.67\.220\.220)$/;
 function dnsAdvice(servers){
   const cur=[...new Set((servers||[]).filter(Boolean))];
   return { cur, curStr:cur.length?cur.join(', '):null, onPublic:cur.some(s=>PUBLIC_DNS.test(s)) };
 }
-function dnsSwitchFix(servers, base){            // "switch DNS" advice that names current servers
+function dnsSwitchFix(servers, base){
   const a=dnsAdvice(servers);
   if(a.onPublic) return `Your DNS is already a public resolver (${a.curStr}) - this is likely transient, usually nothing to change.`;
   return (a.curStr?`Your current DNS is ${a.curStr}. `:'')+base;
 }
 
+/* ---------- snapshot diagnosis (unchanged logic) ---------- */
 function diagnose(d){
   const lat=d.latency||[], dnsT=d.dnsTest||[], wifi=d.wifi||{};
-  const ipTargets=lat.filter(l=>/^\d/.test(l.target));               // 1.1.1.1 / 8.8.8.8
+  const ipTargets=lat.filter(l=>/^\d/.test(l.target));
   const ipReplies=ipTargets.filter(l=>l.received>0);
   const internetOk=ipReplies.length>0;
   const avgLat = ipReplies.length ? ipReplies.reduce((a,b)=>a+(b.avgMs||0),0)/ipReplies.length : null;
   const maxLoss = ipTargets.length ? Math.max(...ipTargets.map(l=>l.lossPct||0)) : 0;
   const dnsServers=[...new Set((d.dns||[]).flatMap(x=>x.servers||[]))];
   const dnsResolved=dnsT.filter(t=>t.resolved);
-  const dnsWarm=dnsResolved.length>1?dnsResolved.slice(1):dnsResolved;   // skip cold first lookup
+  const dnsWarm=dnsResolved.length>1?dnsResolved.slice(1):dnsResolved;
   const dnsOk=dnsResolved.length>0;
   const dnsFullyFails=dnsT.length>0 && dnsResolved.length===0;
   const dnsSlow=dnsWarm.some(t=>t.ms>=300);
@@ -375,10 +441,8 @@ function diagnose(d){
   const up=(d.adapters||[]).filter(a=>a.status==='Up');
   const onWifi = !!(wifi.SSID);
   const sig = wifi.Signal ? parseInt(wifi.Signal) : null;
-
   const problems=[];
   const P=(level,title,detail,fix)=>problems.push({level,title,detail,fix});
-
   if(!up.length){
     P('bad','No network connection','No adapter is up - the PC isn\'t connected to anything.',
       'Plug in the Ethernet cable or connect to Wi-Fi, then run the probe again.');
@@ -386,39 +450,28 @@ function diagnose(d){
     P('bad','No internet access','The PC is connected locally but can\'t reach the internet (no reply from 1.1.1.1 or 8.8.8.8).',
       'Restart your router/modem. If others work, the issue is this PC\'s adapter or firewall.');
   } else if(dnsFullyFails){
-    // the classic case the user mentioned
     const da=dnsAdvice(dnsServers);
     P('bad','DNS is broken','The internet itself works (pings succeed) but website names won\'t resolve. This is a DNS fault - the exact reason sites "won\'t load" while the connection is technically fine.',
       `${da.curStr?`Your current DNS is ${da.curStr}. `:''}Set your DNS servers to 1.1.1.1 and 8.8.8.8 (Adapter settings -> IPv4 -> Properties), then run: ipconfig /flushdns`);
   }
-
-  // secondary warnings (only if connected)
   if(internetOk){
     if(maxLoss>=50) P('bad',`Severe packet loss (${maxLoss}%)`,'Half or more pings are being dropped - the connection is barely usable.','If on Wi-Fi, move closer to the router or switch to Ethernet. Otherwise reboot the router.');
     else if(maxLoss>0) P('warn',`Packet loss (${maxLoss}%)`,'Some pings are dropping - expect stutters in calls/games.','Try Ethernet, or move closer to the access point.');
-
     if(avgLat!=null && avgLat>=120) P('warn',`High latency (${avgLat.toFixed(0)} ms)`,'Round-trips are slow - video calls and gaming will feel laggy.','Reduce distance to the router, or check if something is saturating the line.');
-
     if(dnsOk && dnsSlow) P('warn',`Slow DNS (${dnsAvg} ms)`,'Names resolve, but slowly - pages "hang" for a moment before loading.',
       dnsSwitchFix(dnsServers,'Switch DNS to 1.1.1.1 / 8.8.8.8 for faster lookups.'));
-
     if(onWifi && sig!=null){
       if(sig<40) P('bad',`Weak Wi-Fi signal (${wifi.Signal})`,'Signal is very low - drops and slow speeds are likely.','Move closer to the router, remove obstacles, or use Ethernet.');
       else if(sig<60) P('warn',`Mediocre Wi-Fi signal (${wifi.Signal})`,'Signal is okay but not great.','Moving closer to the router would help reliability.');
     }
   }
-
   const errEvents=(d.events||[]).filter(e=>/Error|Critical/i.test(e.level));
   if(internetOk && errEvents.length>=3)
     P('warn',`${errEvents.length} network errors logged (24h)`,'Windows recorded repeated network errors recently - may indicate intermittent drops.','If problems recur, check the Event Log section below for the source.');
-
-  // verdict
   let verdict;
   if(problems.some(p=>p.level==='bad')) verdict={level:'bad', ic:'X', big:'PROBLEM DETECTED'};
   else if(problems.some(p=>p.level==='warn')) verdict={level:'warn', ic:'!', big:'MINOR ISSUES'};
   else verdict={level:'ok', ic:'OK', big:'NETWORK HEALTHY'};
-
-  // at-a-glance checks
   const checks=[
     {label:'Internet', status:internetOk?'ok':'bad', value:internetOk?'REACHABLE':'DOWN'},
     {label:'Latency',  status:avgLat==null?'bad':avgLat>=120?'warn':'ok', value:avgLat==null?'--':avgLat.toFixed(0)+' ms'},
@@ -427,114 +480,17 @@ function diagnose(d){
     {label:onWifi?'Wi-Fi signal':'Connection', status:onWifi?(sig<40?'bad':sig<60?'warn':'ok'):'ok',
      value:onWifi?(wifi.Signal||'--'):(up.length?'WIRED':'--')},
   ];
-
   return {verdict, problems, checks, internetOk, dnsOk};
 }
+</script>
 
-/* ---------- render ---------- */
-function render(d){
-  const out=$('#out'); out.style.display='block';
-  $('#intake').style.display='none';
-  const sys=d.system||{};
-  const dg=diagnose(d);
-
-  let html='';
-  html+=`<div class="resetbar"><button class="btn sm" onclick="newScan()">Back</button><button class="btn sm" onclick="exportReport()">Export report</button>
-    <span>report from <b style="color:var(--p)">${esc(sys.computerName||'?')}</b> - ${esc(fmtDate(d.generatedAt))}</span></div>`;
-
-  // verdict
-  html+=`<div class="verdict v-${dg.verdict.level}">
-    <div class="ic">${dg.verdict.ic}</div>
-    <div><div class="big">${dg.verdict.big}</div>
-    <div class="small">${dg.problems.length? dg.problems.length+' thing'+(dg.problems.length>1?'s':'')+' to look at' : 'all checks passed - nothing to fix'}</div></div></div>`;
-
-  // at-a-glance
-  html+=`<div class="checks">${dg.checks.map(c=>
-    `<div class="chk ${c.status}"><div class="cl">${esc(c.label)}</div><div class="cv">${esc(c.value)}</div></div>`).join('')}</div>`;
-
-  // problems / what to do
-  if(dg.problems.length){
-    html+=sec('WHAT TO LOOK AT','prioritized', dg.problems.map(p=>
-      `<div class="prob ${p.level}"><span class="pt">${p.level==='bad'?'FIX':p.level==='warn'?'CHECK':'OK'}</span>
-        <div><b>${esc(p.title)}</b> - ${esc(p.detail)}${p.fix?`<div class="pfix">${esc(p.fix)}</div>`:''}</div></div>`).join(''));
-  } else {
-    html+=sec('WHAT TO LOOK AT','', `<div class="prob ok"><span class="pt">OK</span>
-      <div><b>Your connection looks healthy.</b> Internet is reachable, latency is fine, and DNS is resolving normally. If you're still seeing trouble it's likely app- or website-specific, not your network.</div></div>`);
-  }
-
-  // ---- raw data drawer ----
-  let raw='';
-  raw+=sec('INTERFACES','adapters + ip', table(
-    ['Name','Status','Type','Link','IPv4','Gateway','MAC'],
-    (d.adapters||[]).map(a=>{
-      const ip=(d.ipConfig||[]).find(c=>c.alias===a.name)||{};
-      const upd=a.status==='Up';
-      return [esc(a.name),`<span class="${upd?'st-up':'st-down'}">[${upd?'UP':esc((a.status||'').toUpperCase())}]</span>`,
-        esc(a.mediaType),esc(a.linkSpeed),esc(ip.ipv4||'--'),esc(ip.gateway||'--'),esc(a.macAddress||'--')];
-    })));
-
-  let net=`<p class="line dim">ping - 4 packets each</p>`+table(['Target','Loss','Avg','Min','Max'],
-    (d.latency||[]).map(l=>[esc(l.target),`${l.lossPct}%`,
-      l.avgMs!=null?l.avgMs+' ms':'--',l.minMs!=null?l.minMs+' ms':'--',l.maxMs!=null?l.maxMs+' ms':'--']));
-  net+=`<p class="line dim" style="margin-top:12px">DNS resolution time</p>`+table(['Host','Time','Resolved','Addresses'],
-    (d.dnsTest||[]).map(t=>[esc(t.host),t.ms+' ms',
-      t.resolved?'<span class="st-up">yes</span>':'<span class="st-down">NO</span>',esc((t.addresses||[]).join(', ')||'--')]));
-  const dnsServers=[...new Set((d.dns||[]).flatMap(x=>x.servers||[]))];
-  if(dnsServers.length) net+=`<p class="line">resolvers in use: <b>${esc(dnsServers.join('  '))}</b></p>`;
-  raw+=sec('LATENCY / DNS','reachability',net);
-
-  if(d.wifi && Object.keys(d.wifi).filter(k=>k!=='raw').length){
-    const w=d.wifi; const keys=['SSID','BSSID','Signal','Band','Channel','Radio type','Receive rate (Mbps)','Transmit rate (Mbps)','Authentication','State'];
-    raw+=sec('WIRELESS LINK',esc(w.SSID||''),table(['Property','Value'],keys.filter(k=>w[k]!=null).map(k=>[esc(k),`<b>${esc(w[k])}</b>`])));
-  }
-
-  const totRx=(d.adapterStats||[]).reduce((a,b)=>a+(b.receivedBytes||0),0);
-  const totTx=(d.adapterStats||[]).reduce((a,b)=>a+(b.sentBytes||0),0);
-  raw+=sec('TRAFFIC SINCE BOOT','counters',
-    `<p class="line">downloaded <b>${bytes(totRx)}</b> - uploaded <b>${bytes(totTx)}</b> - uptime <b>${num(sys.uptimeHours,1)} h</b> - public IP <b>${esc(d.publicIp||'--')}</b></p>`);
-
-  const talk={};
-  (d.connections||[]).forEach(c=>{ const k=(c.process||'?')+' -> '+c.remoteAddress;
-    talk[k]=talk[k]||{process:c.process,remote:c.remoteAddress,port:c.remotePort,n:0}; talk[k].n++; });
-  const talkers=Object.values(talk).sort((a,b)=>b.n-a.n).slice(0,40);
-  raw+=sec('OUTBOUND SESSIONS',`${(d.connections||[]).length} active`,table(['Process','Remote','Port','Conns'],
-    talkers.map(t=>[esc(t.process||'?'),esc(t.remote),esc(t.port),t.n])));
-
-  raw+=sec('LISTENING PORTS',`${(d.listening||[]).length} sockets`,table(['Address','Port','Process','PID'],
-    (d.listening||[]).map(p=>[esc(p.localAddress),esc(p.localPort),esc(p.process||'?'),esc(p.pid)])));
-
-  const evs=(d.events||[]);
-  raw+=sec('EVENT LOG',`last ${d.hoursWindow||24}h`, evs.length?table(['Time','Level','Source','Message'],
-    evs.map(e=>[`<span style="color:var(--p-dim)">${esc(fmtTime(e.time))}</span>`,
-      `<span class="lvl L${esc((e.level||'').toLowerCase())}">${esc(e.level||'')}</span>`,
-      esc((e.provider||'').split('-').pop()),
-      `<span style="white-space:normal">${esc((e.message||'').slice(0,160))}</span>`])):`<p class="line dim">no events</p>`);
-
-  html+=`<details><summary>Show raw diagnostic data (${(d.adapters||[]).length} interfaces - ${(d.connections||[]).length} connections - ${evs.length} events)</summary>${raw}</details>`;
-
-  out.innerHTML=html;
-  window.scrollTo({top:0,behavior:'smooth'});
-}
-/* ---------- MONITOR mode ---------- */
-function pctl(arr,p){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>x-y);
-  const i=Math.min(a.length-1, Math.floor(p/100*a.length)); return a[i]; }
-function fmtDur(sec){ sec=Math.round(sec); if(sec<60) return sec+'s';
-  const m=Math.floor(sec/60), s=sec%60; if(m<60) return s?`${m}m ${s}s`:`${m}m`;
-  const h=Math.floor(m/60), mm=m%60; return mm?`${h}h ${mm}m`:`${h}h`; }
-function clock(t){ try{ return new Date(t).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }catch{ return ''; } }
-// concise timestamp label for a list of event times: "at 14:32" / "first 14:32, last 16:10 (3x)"
-function whenLabel(times){ times=(times||[]).filter(Boolean); if(!times.length) return null;
-  if(times.length===1) return 'at '+clock(times[0]);
-  return `first ${clock(times[0])}, last ${clock(times[times.length-1])} (${times.length}x)`; }
-
-function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch{ return String(u); } }
-const HTTP_SLOW=1500;   // ms - a service "slow to respond" threshold
-
+<script>
+/* ---------- monitor analysis ---------- */
 function analyzeMonitor(meta, ticks){
   const targets = (meta.targets&&meta.targets.length)?meta.targets:['1.1.1.1','8.8.8.8'];
   const httpTargets = meta.httpTargets || [];
   const interval = meta.intervalSec || 20;
-  const q = tk => (tk && tk.q && typeof tk.q==='object') ? tk.q : null;   // v2 burst quality
+  const q = tk => (tk && tk.q && typeof tk.q==='object') ? tk.q : null;
   const rows = ticks.map(tk=>{
     const reach = targets.map(t=>tk[t]).filter(v=>typeof v==='number' && v>=0);
     const best = reach.length?Math.min(...reach):null;
@@ -542,17 +498,16 @@ function analyzeMonitor(meta, ticks){
     const http = Array.isArray(tk.http)?tk.http:[];
     const httpFail = http.some(x=> !(typeof x.ms==='number' && x.ms>=0));
     const httpSlow = http.some(x=> typeof x.ms==='number' && x.ms>=HTTP_SLOW);
-    // per-tick loss/jitter from the ping bursts (v2); fall back to up/down for v1
     const Q=q(tk);
     let loss=null, jit=null;
     if(Q){
       const tq = targets.map(t=>Q[t]).filter(Boolean);
       const reachedQ = tq.filter(x=>x.recv>0);
-      loss = tq.length ? Math.min(...tq.map(x=>(typeof x.loss==='number'?x.loss:100))) : 100;  // best path's loss
+      loss = tq.length ? Math.min(...tq.map(x=>(typeof x.loss==='number'?x.loss:100))) : 100;
       jit  = reachedQ.length ? Math.min(...reachedQ.map(x=>(typeof x.jit==='number'?x.jit:0))) : null;
     }
-    const gwms = (typeof tk.gw==='number') ? tk.gw : null;          // gateway avg ms (-1 = no reply)
-    return { t:tk.t, best, down:(tk.up===false)||reach.length===0, dns, dnsFail:dns===-1,
+    const gwms = (typeof tk.gw==='number') ? tk.gw : null;
+    return { t:tk.t, tms:+new Date(tk.t), best, down:(tk.up===false)||reach.length===0, dns, dnsFail:dns===-1,
              sig:(typeof tk.sig==='number'?tk.sig:null), httpFail, httpSlow,
              loss, jit, gw:gwms, gwReach:(gwms!=null && gwms>=0),
              bssid:tk.bssid||null, band:tk.band||null, chan:(typeof tk.chan==='number'?tk.chan:null),
@@ -560,19 +515,19 @@ function analyzeMonitor(meta, ticks){
              eth:(typeof tk.eth==='number'?tk.eth:null), trace:(Array.isArray(tk.trace)?tk.trace:null) };
   });
   const N=rows.length;
-  const hasQ = rows.some(r=>r.loss!=null);          // v2 log with burst data?
+  const hasQ = rows.some(r=>r.loss!=null);
 
-  // sleep / power-off gaps: big holes between samples are "no data", not "all fine"
+  // sleep / power-off gaps
   const GAPF = 3;
   let activeSec = N ? interval : 0, noDataSec = 0;
   const gapList = [];
   for(let i=1;i<N;i++){
-    const dt = (new Date(rows[i].t) - new Date(rows[i-1].t)) / 1000;
-    if(dt > Math.max(GAPF*interval, 60)){ rows[i].gapBefore = dt; noDataSec += dt; gapList.push({t:rows[i-1].t, dur:dt}); }
+    const dt = (rows[i].tms - rows[i-1].tms) / 1000;
+    if(dt > Math.max(GAPF*interval, 60)){ rows[i].gapBefore = dt; noDataSec += dt; gapList.push({t:rows[i-1].t, tms:rows[i-1].tms, dur:dt}); }
     else if(dt > 0) activeSec += dt;
   }
 
-  // per-service (http) reachability series, aligned to rows
+  // per-service reachability
   const httpSeries = httpTargets.map(u=>{
     const samples = ticks.map((tk,i)=>{
       const h = (Array.isArray(tk.http)?tk.http:[]).find(x=>x.u===u) || {};
@@ -591,21 +546,22 @@ function analyzeMonitor(meta, ticks){
       slow: reach.filter(s=>s.ms>=HTTP_SLOW).length,
       fails: fails.length, failUp: fails.filter(s=>s.internetUp).length, outs };
   });
-  // outages = contiguous down runs (carry the first trace captured during the outage)
+
+  // outages
   const outages=[]; let cur=null;
-  rows.forEach((r,i)=>{ if(r.down){ if(!cur)cur={start:r.t,count:0,trace:null}; cur.count++; cur.end=r.t; if(r.trace&&!cur.trace)cur.trace=r.trace; }
+  rows.forEach(r=>{ if(r.down){ if(!cur)cur={start:r.t,count:0,trace:null}; cur.count++; cur.end=r.t; if(r.trace&&!cur.trace)cur.trace=r.trace; }
     else if(cur){ outages.push(cur); cur=null; } });
   if(cur) outages.push(cur);
   const downTicks=rows.filter(r=>r.down).length;
   const totalDownSec=downTicks*interval;
-  const uptimePct=activeSec>0?Math.max(0,Math.min(100,100*(1-totalDownSec/activeSec))):100;  // time-weighted, gaps excluded
+  const uptimePct=activeSec>0?Math.max(0,Math.min(100,100*(1-totalDownSec/activeSec))):100;
   const activeDays=Math.max(activeSec/86400, 1/24);
   const lats=rows.map(r=>r.best).filter(v=>v!=null);
   const avgLat=lats.length?lats.reduce((a,b)=>a+b,0)/lats.length:null;
   const p95=pctl(lats,95);
   const spikes=rows.filter(r=>r.best!=null&&r.best>=120).length;
   const dnsM=rows.filter(r=>r.dns!=null&&r.dns>=0);
-  const dnsWarm=dnsM.length>1?dnsM.slice(1):dnsM;                 // skip cold first lookup
+  const dnsWarm=dnsM.length>1?dnsM.slice(1):dnsM;
   const dnsFails=rows.filter(r=>r.dnsFail).length;
   const dnsSlowArr=dnsWarm.filter(r=>r.dns>=300);
   const dnsSlow=dnsSlowArr.length;
@@ -614,57 +570,69 @@ function analyzeMonitor(meta, ticks){
   const sigs=rows.map(r=>r.sig).filter(v=>v!=null);
   const onWifi=sigs.length>0;
   const minSig=sigs.length?Math.min(...sigs):null;
+  const maxSig=sigs.length?Math.max(...sigs):null;
   const sigDips=rows.filter(r=>r.sig!=null&&r.sig<40).length;
   const startT=N?rows[0].t:meta.startedAt, endT=N?rows[N-1].t:meta.startedAt;
-  const spanSec=N?(new Date(endT)-new Date(startT))/1000:0;
+  const t0=N?rows[0].tms:+new Date(meta.startedAt), t1=N?rows[N-1].tms:t0+1;
+  const spanSec=N?(t1-t0)/1000:0;
 
-  // ---- v2 extras: packet loss / jitter (Teams), gateway hop, Wi-Fi roaming/band/rate ----
-  const lossRows=rows.filter(r=>r.loss!=null && !r.down);          // loss while connected
+  // loss / jitter
+  const lossRows=rows.filter(r=>r.loss!=null && !r.down);
   const lossTicks=lossRows.filter(r=>r.loss>0).length;
   const avgLoss=lossRows.length?(lossRows.reduce((a,b)=>a+b.loss,0)/lossRows.length):null;
   const maxLoss=lossRows.length?Math.max(...lossRows.map(r=>r.loss)):null;
   const jits=rows.filter(r=>r.jit!=null && !r.down).map(r=>r.jit);
   const avgJit=jits.length?Math.round(jits.reduce((a,b)=>a+b,0)/jits.length):null;
   const maxJit=jits.length?Math.max(...jits):null;
-  const jitHigh=jits.filter(j=>j>=30).length;                     // ~30ms+ jitter hurts calls
+  const jitHigh=jits.filter(j=>j>=30).length;
 
-  // gateway: only meaningful if it EVER answers ICMP (many gateways block ping)
-  const gwAll=rows.filter(r=>r.gw!=null);                          // gateway was probed
+  // gateway
+  const gwAll=rows.filter(r=>r.gw!=null);
   const gwReachN=gwAll.filter(r=>r.gwReach).length;
-  const gwUsable=gwReachN>0;                                       // responds to ping at all?
+  const gwUsable=gwReachN>0;
   const gwReachPct=gwAll.length?100*gwReachN/gwAll.length:null;
-  const gwDropWhileUp=rows.filter(r=>!r.down && r.gw!=null && !r.gwReach).length; // gw lost but internet up
+  const gwDropWhileUp=rows.filter(r=>!r.down && r.gw!=null && !r.gwReach).length;
   const gwAvg=(()=>{ const v=rows.filter(r=>r.gwReach).map(r=>r.gw); return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null; })();
 
-  // Wi-Fi roaming (BSSID changes), band, channel, PHY rate
+  // Wi-Fi roaming (ALL roam times, uncapped) + band switches
   const bssidRows=rows.filter(r=>r.bssid);
-  let roams=0; const roamAt=[];
-  for(let i=1;i<bssidRows.length;i++){ if(bssidRows[i].bssid!==bssidRows[i-1].bssid){ roams++; if(roamAt.length<8) roamAt.push(bssidRows[i].t); } }
+  let roams=0; const roamTimes=[]; const roamPairs=[];
+  for(let i=1;i<bssidRows.length;i++){
+    if(bssidRows[i].bssid!==bssidRows[i-1].bssid){
+      roams++; roamTimes.push(bssidRows[i].t);
+      roamPairs.push({t:bssidRows[i].t,tms:bssidRows[i].tms,from:bssidRows[i-1].bssid,to:bssidRows[i].bssid});
+    }
+  }
+  const bandSwitches=[];
+  const bandRows=rows.filter(r=>r.band);
+  for(let i=1;i<bandRows.length;i++){
+    if(bandRows[i].band!==bandRows[i-1].band) bandSwitches.push({t:bandRows[i].t,tms:bandRows[i].tms,from:bandRows[i-1].band,to:bandRows[i].band});
+  }
   const aps=[...new Set(bssidRows.map(r=>r.bssid))];
   const bands=[...new Set(rows.map(r=>r.band).filter(Boolean))];
   const on5=bands.some(b=>/5\s*g/i.test(b)), on24=bands.some(b=>/2\.4/i.test(b));
   const rates=rows.map(r=>r.rx).filter(v=>v!=null);
   const minRate=rates.length?Math.min(...rates):null;
-  const lowRate=rows.filter(r=>r.rx!=null && r.rx<60).length;     // <60 Mbps PHY = poor link
-  rows.forEach(r=>{ r.gwBad = gwUsable && r.gw!=null && !r.gwReach && !r.down; });  // gw drop while up (only if gw answers ping)
+  const lowRate=rows.filter(r=>r.rx!=null && r.rx<60).length;
+  rows.forEach(r=>{ r.gwBad = gwUsable && r.gw!=null && !r.gwReach && !r.down; });
 
-  // channel congestion (periodic neighbour scans), adapter/driver/power, IPv6
+  // congestion / adapter / ipv6
   const nbrScans = ticks.filter(t=>t && t.nbr && typeof t.nbr.coChan==='number');
-  const coChanOthers = nbrScans.length ? Math.max(0, Math.max(...nbrScans.map(t=>t.nbr.coChan))-1) : null; // exclude own AP
+  const coChanOthers = nbrScans.length ? Math.max(0, Math.max(...nbrScans.map(t=>t.nbr.coChan))-1) : null;
   const nbrTotalMax = nbrScans.length ? Math.max(...nbrScans.map(t=>t.nbr.total)) : null;
   const congChan = nbrScans.length ? nbrScans[nbrScans.length-1].nbr.chan : null;
   const adapter = meta.adapter || null;
   const ipv6 = meta.ipv6 || null;
   const pmSuspend = !!(adapter && adapter.powerMgmt && /enabled/i.test(adapter.powerMgmt.selectiveSuspend||''));
 
-  // Windows Wi-Fi events (disconnect reasons from the WLAN-AutoConfig log)
+  // Windows Wi-Fi disconnect events
   const wlanEvs = ticks.flatMap(t=>Array.isArray(t&&t.wlanEv)?t.wlanEv:[]);
   const wlanDiscs = wlanEvs.filter(e=>e&&e.id===8003);
   const discReasons = {};
   wlanDiscs.forEach(e=>{ const r=String(e.msg||'disconnect').replace(/^disconnect:?\s*/,'')||'unspecified'; discReasons[r]=(discReasons[r]||0)+1; });
   const topReasons = Object.entries(discReasons).sort((a,b)=>b[1]-a[1]).slice(0,3);
 
-  // Ethernet link renegotiation (1000 -> 100 Mbps = failing cable/port)
+  // Ethernet renegotiation
   const ethRows = rows.filter(r=>r.eth!=null);
   const ethShifts=[]; let prevEth=null;
   ethRows.forEach(r=>{ if(prevEth!=null && r.eth!==prevEth) ethShifts.push({t:r.t,from:prevEth,to:r.eth}); prevEth=r.eth; });
@@ -672,68 +640,133 @@ function analyzeMonitor(meta, ticks){
   const ethMin=ethRows.length?Math.min(...ethRows.map(r=>r.eth)):null;
   const ethDowngraded = ethMax!=null && ethMin!=null && ethMax>=1000 && ethMin<ethMax;
 
-  const problems=[]; const P=(level,title,detail,fix,when)=>problems.push({level,title,detail,fix,when});
-  const tWhen = pred => whenLabel(rows.filter(pred).map(r=>r.t));
+  // per-band quality split
+  const bandStats={};
+  rows.forEach(r=>{ if(!r.band||r.down) return;
+    const b=bandStats[r.band]=bandStats[r.band]||{n:0,sig:0,sigN:0,jit:0,jitN:0,jitHi:0,loss:0,rate:0,rateN:0};
+    b.n++;
+    if(r.sig!=null){b.sig+=r.sig;b.sigN++;}
+    if(r.jit!=null){b.jit+=r.jit;b.jitN++;if(r.jit>=30)b.jitHi++;}
+    if(r.loss!=null&&r.loss>0)b.loss++;
+    if(r.rx!=null){b.rate+=r.rx;b.rateN++;}
+  });
+  Object.values(bandStats).forEach(b=>{
+    b.share = N? Math.round(100*b.n/N) : 0;
+    b.avgSig = b.sigN? Math.round(b.sig/b.sigN) : null;
+    b.avgJit = b.jitN? Math.round(b.jit/b.jitN) : null;
+    b.avgRate = b.rateN? Math.round(b.rate/b.rateN) : null;
+  });
+
+  // per-AP stats
+  const apStats={};
+  bssidRows.forEach(r=>{
+    const a2=apStats[r.bssid]=apStats[r.bssid]||{n:0,sig:0,sigN:0,minSig:101,bands:{},jitHi:0,loss:0};
+    a2.n++;
+    if(r.sig!=null){a2.sig+=r.sig;a2.sigN++;if(r.sig<a2.minSig)a2.minSig=r.sig;}
+    if(r.band)a2.bands[r.band]=(a2.bands[r.band]||0)+1;
+    if(r.jit!=null&&r.jit>=30)a2.jitHi++;
+    if(r.loss!=null&&r.loss>0)a2.loss++;
+  });
+  Object.keys(apStats).forEach(k=>{
+    const a2=apStats[k];
+    a2.share=bssidRows.length?Math.round(100*a2.n/bssidRows.length):0;
+    a2.avgSig=a2.sigN?Math.round(a2.sig/a2.sigN):null;
+    if(a2.minSig>100)a2.minSig=null;
+    a2.roamsIn=roamPairs.filter(p=>p.to===k||p.from===k).length;
+  });
+
+  // roam <-> degradation correlation (60s window)
+  const degT = rows.filter(r=>!r.down&&((r.loss!=null&&r.loss>0)||(r.jit!=null&&r.jit>=30))).map(r=>r.tms);
+  const roamT = roamPairs.map(p=>p.tms);
+  let roamCorrPct=null, roamHitPct=null;
+  if(degT.length && roamT.length){
+    const near = degT.filter(t=>roamT.some(rt=>Math.abs(rt-t)<=60000)).length;
+    roamCorrPct = Math.round(100*near/degT.length);
+    const hits = roamT.filter(rt=>degT.some(t=>Math.abs(rt-t)<=60000)).length;
+    roamHitPct = Math.round(100*hits/roamT.length);
+  }
+
+  // hour-of-day grid (for the heatmap)
+  const hourGrid={}; const dayList=[];
+  rows.forEach(r=>{
+    const d=new Date(r.tms);
+    const day=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(!hourGrid[day]){ hourGrid[day]={}; dayList.push(day); }
+    const h=d.getHours();
+    const cell=hourGrid[day][h]=hourGrid[day][h]||{ok:0,warn:0,bad:0};
+    const st=tickStatus(r); cell[st==='bad'?'bad':st==='warn'?'warn':'ok']++;
+  });
+
+  // events for chart markers
+  const chartEvents=[
+    ...roamPairs.map(p=>({tms:p.tms,type:'roam',label:'roam '+p.from+' -> '+p.to})),
+    ...bandSwitches.map(b=>({tms:b.tms,type:'band',label:'band '+b.from+' -> '+b.to})),
+    ...wlanDiscs.map(e=>({tms:+new Date(e.t),type:'disc',label:String(e.msg||'disconnect')}))
+  ].sort((x,y)=>x.tms-y.tms);
+
+  /* findings - times is an array of ISO timestamps */
+  const problems=[]; const P=(level,title,detail,fix,times)=>problems.push({level,title,detail,fix,times:times||[]});
+  const tTimes = pred => rows.filter(pred).map(r=>r.t);
   if(outages.length){
     const when=outages.slice(0,6).map(o=>`${fmtTime(o.start)} (${fmtDur(o.count*interval)})`).join(', ');
-    // severity scales with how often / how long, not mere existence (one 10s blip in days is not red)
     const maxOutSec = Math.max(...outages.map(o=>o.count*interval));
     const lvl = (totalDownSec>=300 || outages.length/activeDays>=3 || maxOutSec>=120) ? 'bad':'warn';
     P(lvl, `${outages.length} outage${outages.length>1?'s':''} - total ${fmtDur(totalDownSec)} offline`,
       `Your connection went fully down and came back. ${onWifi?'Could be Wi-Fi range/interference or the router/ISP.':'Likely the router or ISP.'} Times: ${when}${outages.length>6?' ...':''}.`,
       onWifi?'Check if drops line up with weak signal below. If so, move closer / use Ethernet. Otherwise reboot the router and, if it persists, report the times to your ISP.'
             :'Reboot the router/modem. If it keeps happening, give these timestamps to your ISP.',
-      whenLabel(outages.map(o=>o.start)));
+      outages.map(o=>o.start));
   }
   if(dnsFails){
     const da=dnsAdvice(meta.dnsServers);
     P(dnsFails>=3?'bad':'warn', `DNS failed ${dnsFails}x`,
       'Names sometimes stopped resolving even when the connection was up - pages would randomly fail to load.',
       `${da.curStr?`Your current DNS is ${da.curStr}. `:''}Set DNS to 1.1.1.1 / 8.8.8.8 (Adapter settings -> IPv4 -> Properties) for more reliable lookups.`,
-      tWhen(r=>r.dnsFail));
+      tTimes(r=>r.dnsFail));
   }
   if(spikes){
     P('warn', `${spikes} latency spike${spikes>1?'s':''} >=120ms`,
       `Latency jumped (peak ${pctl(lats,100)} ms, p95 ${p95} ms) - calls/games would stutter at those moments.`,
       'If on Wi-Fi, reduce distance/interference. Check if something was saturating the line (big downloads/uploads).',
-      tWhen(r=>r.best!=null&&r.best>=120));
+      tTimes(r=>r.best!=null&&r.best>=120));
   }
   if(dnsSlow && !dnsFails){
     P('warn', `Slow DNS on ${dnsSlow} check${dnsSlow>1?'s':''}`,
       `DNS resolved but lagged (up to ${dnsSlowWorst} ms${dnsAvg!=null?`, avg ${dnsAvg} ms`:''}) - pages occasionally "hang" before loading.`,
       dnsSwitchFix(meta.dnsServers,'Switching DNS to 1.1.1.1 / 8.8.8.8 usually fixes intermittent slow lookups.'),
-      whenLabel(dnsSlowArr.map(r=>r.t)));
+      dnsSlowArr.map(r=>r.t));
   }
   if(onWifi && sigDips){
     P(minSig<25?'bad':'warn', `Wi-Fi dropped below 40% (${sigDips}x, low ${minSig}%)`,
       'Signal sagged during the session - a common cause of random drops and slowdowns.',
       'Move closer to the router, reduce obstacles/interference, or switch to Ethernet.',
-      tWhen(r=>r.sig!=null&&r.sig<40));
+      tTimes(r=>r.sig!=null&&r.sig<40));
   }
-  // ---- v2: packet loss / jitter (the real Teams killers), gateway hop, roaming, band, rate ----
   if(hasQ && lossTicks){
     P((lossTicks>=5 && (maxLoss>=20||avgLoss>=2) && lossTicks/activeDays>=2)?'bad':'warn', `Packet loss on ${lossTicks} of ${lossRows.length} checks (peak ${maxLoss}%)`,
       `Even while the connection was technically "up", pings were being dropped. This is exactly what makes Teams glitch, freeze or drop audio while web pages still load fine - and why it's so easy to miss.`,
       onWifi?'Loss without full outages usually means Wi-Fi interference or a weak link - compare with signal/roaming below. An Ethernet test at this seat would confirm it.':'Check for a saturated line or a failing cable/port.',
-      tWhen(r=>!r.down&&r.loss!=null&&r.loss>0));
+      tTimes(r=>!r.down&&r.loss!=null&&r.loss>0));
   }
   if(hasQ && jitHigh){
     P((maxJit>=60 && jitHigh>=5 && jitHigh/activeDays>=2)?'bad':'warn', `High jitter on ${jitHigh} check${jitHigh>1?'s':''} (peak ${maxJit} ms)`,
-      `Round-trip times were unstable from one ping to the next. Jitter - not raw latency - is what breaks real-time audio/video, so this fits the Teams complaints.`,
+      `Round-trip times were unstable from one ping to the next. Jitter - not raw latency - is what breaks real-time audio/video, so this fits the Teams complaints.`+
+      (roamCorrPct!=null&&roamCorrPct>=40?` ${roamCorrPct}% of the degraded moments were within a minute of an AP roam.`:''),
       'On Wi-Fi this is typically interference or a weak/roaming link; Ethernet almost always removes it.',
-      tWhen(r=>!r.down&&r.jit!=null&&r.jit>=30));
+      tTimes(r=>!r.down&&r.jit!=null&&r.jit>=30));
   }
   if(gwUsable && gwDropWhileUp){
     P(gwDropWhileUp>=3?'bad':'warn', `Local gateway dropped ${gwDropWhileUp}x while the internet was up`,
       `Your first hop (the router/AP at ${meta.gateway||'the local gateway'}) briefly stopped responding even though the wider internet was still reachable - that points at the local Wi-Fi link or the access point, not your ISP.`,
       'This is a strong signal that the issue is local to the seat/AP. An Ethernet test here should make these vanish.',
-      tWhen(r=>r.gwBad));
+      tTimes(r=>r.gwBad));
   }
   if(roams){
-    P((roams>=4 && roams/activeDays>=8)?'bad':'warn', `Roamed between access points ${roams}x${aps.length>1?` (${aps.length} APs seen)`:''}`,
-      `The Wi-Fi kept handing off between access points during the session. Each handoff can stall traffic for 1-3s - a classic source of "Teams froze for a second" and random timeouts, and consistent with this seat sitting between two APs.`,
+    P((roams>=6 && roams/activeDays>=24)?'bad':'warn', `Roamed between access points ${roams}x${aps.length>1?` (${aps.length} APs seen)`:''}`,
+      `The Wi-Fi kept handing off between access points during the session. Each handoff can stall traffic for 1-3s - a classic source of "Teams froze for a second" and random timeouts.`+
+      (roamHitPct!=null&&roamHitPct>=40?` ${roamHitPct}% of the roams had loss or jitter within a minute.`:''),
       'If roams line up with the loss/drops above, this seat is in a handoff zone. Ethernet avoids it entirely; otherwise AP placement or roaming/min-RSSI tuning on the controller is the fix.',
-      whenLabel(roamAt));
+      roamTimes);
   }
   if(onWifi && on5 && !on24 && minSig!=null && minSig<55){
     P('warn', `On 5 GHz with a weakish signal (low ${minSig}%)`,
@@ -744,7 +777,7 @@ function analyzeMonitor(meta, ticks){
     P('warn', `Wi-Fi link rate fell low (${lowRate}x under 60 Mbps, min ${minRate} Mbps)`,
       `The negotiated Wi-Fi PHY rate dropped to levels that struggle with calls and big transfers - the fingerprint of a weak/distant link.`,
       'Correlate with the signal dips below; a closer AP or Ethernet fixes it.',
-      tWhen(r=>r.rx!=null&&r.rx<60));
+      tTimes(r=>r.rx!=null&&r.rx<60));
   }
   if(coChanOthers!=null && coChanOthers>=3){
     P(coChanOthers>=6?'bad':'warn', `Crowded Wi-Fi channel (${coChanOthers} other networks on channel ${congChan})`,
@@ -761,40 +794,39 @@ function analyzeMonitor(meta, ticks){
     P((wlanDiscs.length/activeDays>=5)?'bad':'warn', `Windows logged ${wlanDiscs.length} Wi-Fi disconnect${wlanDiscs.length>1?'s':''}`,
       `The adapter's own event log recorded why each drop happened: ${rTxt}. This is the driver/AP side of the story - "AP-initiated" points at the access point, "roaming" at coverage, "radio reset" at the driver.`,
       'Match these reasons and times against the outages/roams above to pin the cause on the AP, the coverage, or the driver.',
-      whenLabel(wlanDiscs.map(e=>e.t)));
+      wlanDiscs.map(e=>e.t));
   }
   if(ethDowngraded){
     P(ethMin<=100?'bad':'warn', `Ethernet link renegotiated ${ethMax} -> ${ethMin} Mbps`,
       `The wired link dropped its negotiated speed during the session - the classic sign of a failing cable, connector or switch port.`,
       'Reseat or replace the network cable, try another switch port, and check the cable run length.',
-      whenLabel(ethShifts.map(s=>s.t)));
+      ethShifts.map(s=>s.t));
   }
-  // service reachability problems (e.g. xledger.net) - with internet-up vs down comparison
   httpSeries.forEach(h=>{
-    const svcWhen = whenLabel(h.outs.map(o=>o.start));
+    const svcTimes = h.outs.map(o=>o.start);
     if(h.fails){
       const dur=fmtDur(h.fails*interval), bad=h.reachPct<95||h.failUp>=3;
       if(h.failUp===h.fails)
         P(bad?'bad':'warn', `${h.host} unreachable ${h.fails}x (${dur} total)`,
           `Couldn't reach ${h.host} on ${h.fails} check${h.fails>1?'s':''} - but your internet was up at those moments, so the problem is ${h.host} itself or the route to it, not your connection.`,
-          `If it's critical, check ${h.host}'s status page and try from another network to confirm. Capture these timestamps for their support.`, svcWhen);
+          `If it's critical, check ${h.host}'s status page and try from another network to confirm. Capture these timestamps for their support.`, svcTimes);
       else if(h.failUp===0)
         P('warn', `${h.host} unreachable ${h.fails}x - only during your own outages`,
           `Every time ${h.host} was unreachable, your whole connection was also down - so this is your local outage, not ${h.host}.`,
-          `Fix the local drops (see the outage section) and ${h.host} will come back with them.`, svcWhen);
+          `Fix the local drops (see the outage section) and ${h.host} will come back with them.`, svcTimes);
       else
         P(bad?'bad':'warn', `${h.host} unreachable ${h.fails}x (${dur} total)`,
           `${h.failUp} failure${h.failUp>1?'s':''} happened while your internet was otherwise fine (likely a ${h.host}/routing issue); the rest lined up with local outages.`,
-          `Mixed cause - address the local drops, and report the internet-was-up failures to ${h.host}.`, svcWhen);
+          `Mixed cause - address the local drops, and report the internet-was-up failures to ${h.host}.`, svcTimes);
     } else if(h.slow){
       P('warn', `${h.host} slow to respond ${h.slow}x`,
         `Reachable, but took >=1.5s on ${h.slow} check${h.slow>1?'s':''} (avg ${h.avgMs} ms).`,
         `Usually the service or the route to it. Watch whether it lines up with your own latency spikes.`,
-        whenLabel(h.samples.filter(s=>s.ok&&s.ms>=HTTP_SLOW).map(s=>s.t)));
+        h.samples.filter(s=>s.ok&&s.ms>=HTTP_SLOW).map(s=>s.t));
     }
   });
 
-  // verdict - name the headline problem
+  // verdict
   let verdict;
   const svcDown = httpSeries.find(h=>h.fails && h.failUp>0);
   const wifiInstab = (lossTicks||jitHigh||roams||gwDropWhileUp||sigDips||lowRate);
@@ -828,13 +860,17 @@ function analyzeMonitor(meta, ticks){
   if(coChanOthers!=null) checks.push({label:'Ch. neighbours', status:coChanOthers>=6?'bad':coChanOthers>=3?'warn':'ok', value:String(coChanOthers)});
   if(ipv6) checks.push({label:'IPv6', status:'ok', value: ipv6.reachable?(ipv6.ms!=null?ipv6.ms+' ms':'yes'):'n/a'});
 
-  return {rows,outages,interval,targets,httpSeries,verdict,checks,problems,
-          uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsAvg,minSig,onWifi,startT,endT,spanSec,N,
-          hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,
-          gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamAt,aps,bands,on5,on24,minRate,lowRate,radio:(rows.find(r=>r.radio)||{}).radio,
-          coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend,
-          activeSec,noDataSec,gapList,wlanDiscs,topReasons,ethRows,ethShifts,ethMax,ethMin,ethDowngraded,
-          bssidHidden:!!meta.bssidHidden};
+  const a = {rows,outages,interval,targets,httpSeries,verdict,checks,problems,
+    uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsAvg,minSig,maxSig,onWifi,startT,endT,t0,t1,spanSec,N,
+    hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,
+    gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamTimes,roamPairs,bandSwitches,aps,bands,on5,on24,minRate,lowRate,
+    radio:(rows.find(r=>r.radio)||{}).radio,
+    coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend,
+    activeSec,noDataSec,activeDays,gapList,wlanDiscs,topReasons,ethRows,ethShifts,ethMax,ethMin,ethDowngraded,
+    bandStats,apStats,roamCorrPct,roamHitPct,hourGrid,dayList,chartEvents,
+    bssidHidden:!!meta.bssidHidden};
+  a.narrative = buildNarrative(a, meta);
+  return a;
 }
 
 function tickStatus(r){
@@ -843,95 +879,384 @@ function tickStatus(r){
      || (r.loss!=null&&r.loss>0) || (r.jit!=null&&r.jit>=30) || r.gwBad) return 'warn';
   return 'ok';
 }
-function timelineStrip(items, statusFn, legendHtml){
+
+/* ---------- narrative + actions ---------- */
+function buildNarrative(a, meta){
+  const s=[];
+  if(a.verdict.level==='ok'){
+    s.push('The connection held steady for the whole monitored period: no outages that matter, stable latency, healthy DNS.');
+  } else {
+    if(a.outages.length && a.totalDownSec>=300) s.push(`The connection fully dropped ${a.outages.length} time${a.outages.length>1?'s':''} (${fmtDur(a.totalDownSec)} offline in total).`);
+    if(a.onWifi && a.minSig!=null && a.minSig<40) s.push(`Wi-Fi coverage at this location is weak - the signal floor was ${a.minSig}%.`);
+    const b5=a.bandStats['5 GHz'], b24=a.bandStats['2.4 GHz'];
+    if(b5&&b24&&b5.avgSig!=null&&b24.avgSig!=null&&b24.avgSig-b5.avgSig>=10)
+      s.push(`5 GHz is markedly weaker than 2.4 GHz here (avg ${b5.avgSig}% vs ${b24.avgSig}%), so the client keeps falling back to the crowded 2.4 GHz band.`);
+    if(a.roams && a.roamCorrPct!=null && a.roamCorrPct>=40)
+      s.push(`${a.roamCorrPct}% of the degraded moments happened within a minute of an AP roam - the roaming itself is the disruption.`);
+    else if(a.roams>=6 && a.aps.length>1)
+      s.push(`The client hopped between ${a.aps.length} access points ${a.roams} times - it never has one clearly dominant AP.`);
+    const svc=a.httpSeries.find(h=>h.fails&&h.failUp===h.fails);
+    if(svc) s.push(`${svc.host} was unreachable while the internet itself was fine - that problem is on their side, not yours.`);
+    if(a.ethDowngraded) s.push(`The wired link renegotiated down to ${a.ethMin} Mbps - a failing cable or port.`);
+    if(!s.length) s.push('Mostly healthy, with a few isolated events listed below.');
+  }
+  // top actions: dedupe fixes, bad first
+  const seen=new Set(); const acts=[];
+  [...a.problems].sort((x,y)=>(x.level==='bad'?0:1)-(y.level==='bad'?0:1)).forEach(p=>{
+    if(p.fix && !seen.has(p.fix) && acts.length<3){ seen.add(p.fix); acts.push(p.fix); }
+  });
+  return {story:s.join(' '), actions:acts};
+}
+</script>
+
+<script>
+/* ---------- canvas chart engine (time-proportional) ---------- */
+let CHARTQ = [];                 // draw jobs registered while building HTML
+const HOVER = {};                // groupId -> {rows, charts:[{cv,ovl,cfg}], readout, strip, run}
+const RUNCOLORS = ['#3b82f6','#f59e0b','#10b981','#a855f7'];
+function isDark(){ return document.documentElement.dataset.theme==='dark'; }
+function chartTheme(){
+  return isDark()
+    ? {bg:'#0e1117', grid:'#262b36', text:'#9aa3af', gap:'rgba(107,114,128,.25)'}
+    : {bg:'#ffffff', grid:'#e5e7eb', text:'#6b7280', gap:'rgba(156,163,175,.25)'};
+}
+const EVCOLOR = {roam:'#f59e0b', band:'#3b82f6', disc:'#ef4444'};
+
+function setupCanvas(cv, hCss){
+  const w = Math.max(200, cv.parentElement.clientWidth || cv.clientWidth || 600);
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(hCss*dpr);
+  cv.style.height = hCss+'px';
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w, h:hCss};
+}
+
+// status strip with brush selection
+function drawStrip(run){
+  const cv = document.getElementById('strip-'+run.id); if(!cv) return;
+  const {ctx,w,h} = setupCanvas(cv, 38);
+  const a = run.a, T = chartTheme();
+  const t0=a.t0, t1=Math.max(a.t1, a.t0+1);
+  const px = t => Math.max(0, Math.min(w-1, Math.floor((t-t0)/(t1-t0)*w)));
+  const RANK={ok:0,warn:1,gap:2,bad:3};
+  const buck = new Array(w).fill(-1);
+  a.rows.forEach(r=>{ const x=px(r.tms); const rk=RANK[tickStatus(r)]||0; if(rk>buck[x]) buck[x]=rk; });
+  (a.gapList||[]).forEach(g=>{ const x1=px(g.tms), x2=px(g.tms+g.dur*1000);
+    for(let x=x1;x<=x2;x++){ if(buck[x]<0) buck[x]=RANK.gap; } });
+  for(let x=1;x<w;x++){ if(buck[x]<0) buck[x]=buck[x-1]; }        // forward-fill
+  const COL={0:'#22c55e',1:'#f59e0b',2:(isDark()?'#4b5563':'#c2c8d1'),3:'#ef4444'};
+  ctx.fillStyle=T.bg; ctx.fillRect(0,0,w,h);
+  for(let x=0;x<w;x++){ if(buck[x]>=0){ ctx.fillStyle=COL[buck[x]]; ctx.fillRect(x,2,1,h-4); } }
+  // brush selection
+  if(run.view){
+    const x1=px(run.view[0]), x2=px(run.view[1]);
+    ctx.fillStyle='rgba(59,130,246,.25)'; ctx.fillRect(x1,0,Math.max(2,x2-x1),h);
+    ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.strokeRect(x1+.5,.5,Math.max(2,x2-x1)-1,h-1);
+  }
+  if(!cv._wired){
+    cv._wired=true;
+    let dragX=null;
+    const xToT = x => t0 + (x/cv.clientWidth)*(t1-t0);
+    cv.addEventListener('mousedown',e=>{ dragX=e.offsetX; });
+    cv.addEventListener('mousemove',e=>{
+      if(dragX==null) return;
+      run.view=[xToT(Math.min(dragX,e.offsetX)), xToT(Math.max(dragX,e.offsetX))];
+      drawStrip(run);
+    });
+    const finish=e=>{
+      if(dragX==null) return;
+      const dx=Math.abs(e.offsetX-dragX); dragX=null;
+      if(dx<6){ run.view=null; }
+      else { run.view=[Math.min(run.view[0],run.view[1]), Math.max(run.view[0],run.view[1])]; }
+      redrawRun(run);
+    };
+    cv.addEventListener('mouseup',finish);
+    cv.addEventListener('mouseleave',e=>{ if(dragX!=null) finish(e); });
+    cv.addEventListener('dblclick',()=>{ run.view=null; redrawRun(run); });
+  }
+}
+
+// generic time-series chart: envelope + avg line, events, thresholds, loss dots
+function drawChart(cv, cfg){
+  const {ctx,w,h} = setupCanvas(cv, cfg.h||96);
+  const T = chartTheme();
+  ctx.fillStyle=T.bg; ctx.fillRect(0,0,w,h);
+  const t0=cfg.t0, t1=Math.max(cfg.t1, cfg.t0+1);
+  const px = t => (t-t0)/(t1-t0)*w;
+  // y range
+  let maxV = cfg.yMin||1;
+  cfg.series.forEach(s=>s.pts.forEach(p=>{ if(p[1]!=null && p[0]>=t0 && p[0]<=t1 && p[1]>maxV) maxV=p[1]; }));
+  if(cfg.thresholds) cfg.thresholds.forEach(th=>{ if(th.v>maxV*0.9) maxV=Math.max(maxV,th.v*1.15); });
+  maxV*=1.06;
+  const py = v => h-4-(v/maxV)*(h-16);
+  // grid: 2 horizontal lines
+  ctx.strokeStyle=T.grid; ctx.lineWidth=1;
+  [0.33,0.66].forEach(f=>{ const y=Math.round(py(maxV*f/1.06))+.5; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); });
+  // gaps shading
+  (cfg.gaps||[]).forEach(g=>{ const x1=px(g.tms), x2=px(g.tms+g.dur*1000);
+    if(x2<0||x1>w) return; ctx.fillStyle=T.gap; ctx.fillRect(Math.max(0,x1),0,Math.min(w,x2)-Math.max(0,x1),h); });
+  // thresholds
+  (cfg.thresholds||[]).forEach(th=>{
+    const y=Math.round(py(th.v))+.5; ctx.strokeStyle=th.color; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); ctx.setLineDash([]);
+  });
+  // events
+  (cfg.events||[]).forEach(ev=>{
+    if(ev.tms<t0||ev.tms>t1) return;
+    const x=Math.round(px(ev.tms))+.5;
+    ctx.strokeStyle=EVCOLOR[ev.type]||'#888'; ctx.globalAlpha=.5;
+    ctx.beginPath(); ctx.moveTo(x,2); ctx.lineTo(x,h-2); ctx.stroke(); ctx.globalAlpha=1;
+  });
+  // series: per-pixel bucket envelope + avg
+  cfg.series.forEach(s=>{
+    const bmin=new Array(w).fill(null), bmax=new Array(w).fill(null), bsum=new Array(w).fill(0), bn=new Array(w).fill(0);
+    s.pts.forEach(p=>{
+      if(p[0]<t0||p[0]>t1) return;
+      const x=Math.max(0,Math.min(w-1,Math.floor(px(p[0]))));
+      if(p[1]==null){ return; }
+      if(bmin[x]==null||p[1]<bmin[x]) bmin[x]=p[1];
+      if(bmax[x]==null||p[1]>bmax[x]) bmax[x]=p[1];
+      bsum[x]+=p[1]; bn[x]++;
+    });
+    // envelope
+    ctx.fillStyle=s.color+'33';
+    let x=0;
+    while(x<w){
+      if(bn[x]){ let x2=x; while(x2<w&&bn[x2]) x2++;
+        ctx.beginPath();
+        for(let i=x;i<x2;i++) ctx.lineTo(i,py(bmax[i]));
+        for(let i=x2-1;i>=x;i--) ctx.lineTo(i,py(bmin[i]));
+        ctx.closePath(); ctx.fill();
+        x=x2;
+      } else x++;
+    }
+    // avg line
+    ctx.strokeStyle=s.color; ctx.lineWidth=1.4; ctx.beginPath();
+    let pen=false;
+    for(let i=0;i<w;i++){
+      if(bn[i]){ const y=py(bsum[i]/bn[i]); if(pen) ctx.lineTo(i,y); else { ctx.moveTo(i,y); pen=true; } }
+      else pen=false;
+    }
+    ctx.stroke();
+  });
+  // loss dots (red) at top
+  (cfg.lossDots||[]).forEach(t=>{
+    if(t<t0||t>t1) return;
+    ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(px(t),7,2.6,0,7); ctx.fill();
+  });
+  // y max label
+  ctx.fillStyle=T.text; ctx.font='10.5px '+getComputedStyle(document.body).fontFamily;
+  ctx.fillText(Math.round(maxV/1.06)+(cfg.unit||''), 6, h-7);
+  cfg._maxV=maxV; cfg._w=w; cfg._h=h;
+}
+
+function redrawRun(run){
+  drawStrip(run);
+  (CHARTQ.filter(j=>j.runId===run.id)).forEach(j=>j.draw());
+  const g=HOVER[run.id];
+  if(g){ const [t0,t1]=viewOf(run); g.charts.forEach(c=>{ const ax=document.getElementById('ax-'+c.cv.id);
+    if(ax) ax.innerHTML='<span>'+esc(fmtTime(t0))+'</span><span>'+esc(fmtTime(t1))+'</span>'; }); }
+}
+function viewOf(run){ return run.view ? run.view : [run.a.t0, run.a.t1]; }
+function drawAllCharts(){ RUNS.filter(r=>r.kind==='monitor').forEach(r=>{ if(r.id!=null) redrawRun(r); });
+  CHARTQ.filter(j=>j.runId==='cmp').forEach(j=>j.draw()); }
+
+// hover wiring: shared cursor + readout per run block
+function wireHover(run){
+  const g=HOVER[run.id]; if(!g) return;
+  g.charts.forEach(ch=>{
+    const cv=ch.cv;
+    cv.addEventListener('mousemove',e=>{
+      const [t0,t1]=viewOf(run);
+      const t=t0+(e.offsetX/cv.clientWidth)*(t1-t0);
+      // nearest row (binary search)
+      const rows=run.a.rows; let lo=0,hi=rows.length-1;
+      while(lo<hi){ const mid=(lo+hi)>>1; if(rows[mid].tms<t) lo=mid+1; else hi=mid; }
+      const cand=[rows[lo],rows[lo-1]].filter(Boolean);
+      const r=cand.sort((x,y)=>Math.abs(x.tms-t)-Math.abs(y.tms-t))[0];
+      if(!r) return;
+      const ro=document.getElementById('readout-'+run.id);
+      if(ro) ro.textContent = fmtTime(r.t)+'   lat '+(r.best!=null?r.best+'ms':'--')
+        +'   jit '+(r.jit!=null?r.jit+'ms':'--')+'   loss '+(r.loss!=null?r.loss+'%':'--')
+        +'   sig '+(r.sig!=null?r.sig+'%':'--')+'   rate '+(r.rx!=null?r.rx:'--')
+        +(r.bssid?'   ap '+pv('bssid',r.bssid):'')+(r.band?'   '+r.band:'');
+      // cursor line on every overlay in the block
+      g.charts.forEach(c2=>{
+        const o=c2.ovl, w=o.clientWidth, dpr=window.devicePixelRatio||1;
+        o.width=Math.round(w*dpr); o.height=Math.round(o.clientHeight*dpr);
+        const cx=o.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0);
+        cx.clearRect(0,0,w,o.clientHeight);
+        const x=Math.round((r.tms-t0)/((t1-t0)||1)*w)+.5;
+        cx.strokeStyle='rgba(148,163,184,.8)'; cx.beginPath(); cx.moveTo(x,0); cx.lineTo(x,o.clientHeight); cx.stroke();
+      });
+    });
+    cv.addEventListener('mouseleave',()=>{
+      g.charts.forEach(c2=>{ const cx=c2.ovl.getContext('2d'); cx.clearRect(0,0,c2.ovl.width,c2.ovl.height); });
+    });
+  });
+}
+
+/* chart block HTML builder: registers draw jobs */
+function chartBlockHtml(run, series4){
+  // series4: [{key:'lat',label,unit,thresholds,color?}, ...] built by caller
+  let html='';
+  series4.forEach((c,i)=>{
+    const cid='ch-'+run.id+'-'+c.key;
+    html+=`<div class="chartwrap"><span class="chartlbl">${esc(c.label)}</span>
+      <canvas class="base" id="${cid}"></canvas><canvas class="ovl" id="ovl-${cid}"></canvas>
+      ${i===series4.length-1?`<div class="axis" id="ax-${cid}"></div>`:''}</div>`;
+  });
+  html+=`<div class="readout" id="readout-${run.id}"></div>`;
+  return html;
+}
+function registerRunCharts(run){
+  const a=run.a;
+  const mk=(key,label,unit,ptsFn,extra)=>({key,label,unit,ptsFn,extra:extra||{}});
+  const defs=[
+    mk('lat','latency ms (dots = packet loss)','ms',rows=>rows.map(r=>[r.tms,r.best]),{thresholds:[{v:120,color:'rgba(245,158,11,.6)'}],
+      lossDots:a.rows.filter(r=>!r.down&&r.loss!=null&&r.loss>0).map(r=>r.tms)}),
+  ];
+  if(a.hasQ) defs.push(mk('jit','jitter ms','ms',rows=>rows.map(r=>[r.tms,r.jit]),{thresholds:[{v:30,color:'rgba(245,158,11,.6)'}]}));
+  if(a.onWifi) defs.push(mk('sig','Wi-Fi signal %','%',rows=>rows.map(r=>[r.tms,r.sig]),{thresholds:[{v:40,color:'rgba(239,68,68,.5)'}],yMin:100}));
+  if(a.onWifi && a.rows.some(r=>r.rx!=null)) defs.push(mk('rate','link rate Mbps','',rows=>rows.map(r=>[r.tms,r.rx])));
+  HOVER[run.id]={charts:[],run};
+  defs.forEach(d=>{
+    const cid='ch-'+run.id+'-'+d.key;
+    CHARTQ.push({runId:run.id, draw:()=>{
+      const cv=document.getElementById(cid); if(!cv) return;
+      const [t0,t1]=viewOf(run);
+      drawChart(cv,{h:96,t0,t1,unit:d.unit,yMin:d.extra.yMin||1,
+        series:[{color:RUNCOLORS[run.ci%4],pts:d.ptsFn(a.rows)}],
+        events:a.chartEvents, gaps:a.gapList, thresholds:d.extra.thresholds, lossDots:d.extra.lossDots});
+      const ax=document.getElementById('ax-'+cid);
+      if(ax) ax.innerHTML='<span>'+esc(fmtTime(t0))+'</span><span>'+esc(fmtTime(t1))+'</span>';
+      const ovl=document.getElementById('ovl-'+cid);
+      if(ovl){ ovl.style.height=cv.style.height; }
+      const g=HOVER[run.id];
+      if(g && !g.charts.some(c=>c.cv===cv)) g.charts.push({cv,ovl});
+    }});
+  });
+  return chartBlockHtml(run, defs);
+}
+
+/* ---------- hour-of-day heatmap ---------- */
+function heatmapHtml(a){
+  if(a.spanSec<12*3600) return '';
+  const days=a.dayList;
+  const cols='60px repeat(24, 1fr)';
+  let html=`<div class="hm" style="grid-template-columns:${cols}">`;
+  days.forEach(day=>{
+    html+=`<div class="hmlbl">${esc(day.slice(5))}</div>`;
+    for(let h=0;h<24;h++){
+      const c=(a.hourGrid[day]||{})[h];
+      let cls='', title=day+' '+String(h).padStart(2,'0')+':00 - no data';
+      if(c){
+        const tot=c.ok+c.warn+c.bad;
+        const wf=tot?(c.warn+c.bad)/tot:0;
+        if(c.bad>0) cls='hm-bad';
+        else if(wf>0.25) cls='hm-w2';
+        else if(wf>0.05) cls='hm-w1';
+        else cls='hm-ok';
+        title=day+' '+String(h).padStart(2,'0')+':00 - '+c.ok+' ok, '+c.warn+' degraded, '+c.bad+' down';
+      }
+      html+=`<div class="hmc ${cls}" title="${esc(title)}"></div>`;
+    }
+  });
+  html+='</div>';
+  html+=`<div class="hmx" style="grid-template-columns:${cols}"><span></span>${Array.from({length:24},(_,h)=>`<span>${h%3===0?h:''}</span>`).join('')}</div>`;
+  html+=`<div class="tleg"><i><b class="hm-ok"></b> healthy hour</i><i><b class="hm-w1"></b> some degradation</i><i><b class="hm-w2"></b> heavy degradation</i><i><b class="hm-bad"></b> went down</i><i><b class="hm-gap"></b> no data</i></div>`;
+  return sec('WHEN IT HAPPENS','hour of day x date - occupancy patterns show up here',html);
+}
+
+/* ---------- DOM bucket strip (services) ---------- */
+function timelineStripDom(items, statusFn, legendHtml){
   const RANK={ok:0,warn:1,gap:2,bad:3};
   const maxCols=170, per=Math.max(1,Math.ceil(items.length/maxCols)), cols=[];
   for(let i=0;i<items.length;i+=per){
     const slice=items.slice(i,i+per); let s='ok';
     for(const it of slice){ const st=statusFn(it); if((RANK[st]||0)>(RANK[s]||0)) s=st; if(s==='bad') break; }
-    const label = s==='gap' ? 'NO DATA (asleep / off)' : s.toUpperCase();
-    cols.push(`<div class="tcol t-${s}" title="${esc(fmtTime(slice[0].t))}-${esc(fmtTime(slice[slice.length-1].t))} - ${label}"></div>`);
+    cols.push(`<div class="tcol t-${s}" title="${esc(fmtTime(slice[0].t))}-${esc(fmtTime(slice[slice.length-1].t))} - ${s.toUpperCase()}"></div>`);
   }
   return `<div class="timeline">${cols.join('')}</div>`+(legendHtml||'');
 }
-const MAIN_LEGEND=`<div class="tleg"><i><b class="t-ok"></b> healthy</i><i><b class="t-warn"></b> degraded (loss / jitter / weak Wi-Fi / gateway / DNS)</i><i><b class="t-bad"></b> down</i><i><b class="t-gap"></b> no data (asleep / off)</i></div>`;
 const SVC_LEGEND=`<div class="tleg"><i><b class="t-ok"></b> reachable</i><i><b class="t-warn"></b> slow (>=1.5s)</i><i><b class="t-bad"></b> unreachable</i></div>`;
 const svcStatus = s => !s.ok ? 'bad' : (s.ms>=HTTP_SLOW ? 'warn' : 'ok');
-function latChart(rows){
-  const pts=rows.map(r=>r.best), vals=pts.filter(v=>v!=null);
-  if(!vals.length) return '<p class="line dim">no latency samples</p>';
-  const W=1000,H=140,pad=6,n=pts.length,maxV=Math.max(120,Math.max(...vals));
-  const x=i=>pad+i*(W-2*pad)/Math.max(1,n-1), y=v=>H-pad-(v/maxV)*(H-2*pad);
-  let d='',pen=false,rects='';
-  pts.forEach((v,i)=>{ if(v==null){ pen=false; rects+=`<rect x="${(x(i)-1).toFixed(1)}" y="0" width="2" height="${H}" fill="rgba(255,77,77,.45)"/>`; return; }
-    d+=(pen?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)+' '; pen=true; });
-  const ty=y(120).toFixed(1);
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    ${rects}
-    <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="rgba(255,182,39,.45)" stroke-dasharray="5 5" vector-effect="non-scaling-stroke"/>
-    <path class="lat" d="${d}" vector-effect="non-scaling-stroke"/></svg>
-    <div class="chart-x"><span>${esc(fmtTime(rows[0].t))}</span><span>latency ms - amber dash = 120ms - red = outage - peak ${Math.max(...vals)}ms</span><span>${esc(fmtTime(rows[rows.length-1].t))}</span></div>`;
-}
+</script>
 
-function renderMonitor(meta, ticks){
-  const out=$('#out'); out.style.display='block'; $('#intake').style.display='none';
-  const a=analyzeMonitor(meta,ticks);
+<script>
+/* ---------- rendering ---------- */
+function runById(id){ return RUNS.find(r=>r.id===id); }
+function vpill(level){ return `<span class="vp ${level}">${level==='ok'?'OK':level==='warn'?'WARN':'ISSUE'}</span>`; }
 
-  let html='';
-  html+=`<div class="resetbar"><button class="btn sm" onclick="newScan()">Back</button><button class="btn sm" onclick="exportReport()">Export report</button>
-    <span>monitor log - <b style="color:var(--p)">${esc(meta.computerName||'?')}</b> - ${esc(fmtDate(a.startT))} -> ${esc(fmtTime(a.endT))} - ${a.N} samples / ${a.interval}s</span></div>`;
+function monitorHtml(run){
+  const a=run.a, meta=run.meta;
+  const host=pv('host',meta.computerName||'?');
+  const color=RUNCOLORS[run.ci%4];
+  let html=`<section id="${run.id}" class="runblock">`;
+  html+=`<div class="runhead" style="border-left-color:${color}">
+    <span class="runchip"><b style="background:${color}"></b>${esc(host)}</span>
+    <span class="muted">${esc(run.name||'monitor log')} - ${esc(fmtDate(a.startT))} -> ${esc(fmtTime(a.endT))} - ${a.N} samples / ${a.interval}s</span>
+    ${vpill(a.verdict.level)}</div>`;
 
-  if(!a.N){ out.innerHTML=html+`<p class="line dim">log has no samples yet - let the monitor run a while, then re-upload.</p>`;
-    window.scrollTo({top:0,behavior:'smooth'}); return; }
+  if(!a.N){ return html+`<p class="empty">This log has no samples yet - let the monitor run a while, then re-upload.</p></section>`; }
 
   const noData = a.noDataSec>600 ? ' (no data '+fmtDur(a.noDataSec)+' - machine asleep or off)' : '';
-  html+=`<div class="verdict v-${a.verdict.level}"><div class="ic">${a.verdict.ic}</div>
-    <div><div class="big">${a.verdict.big}</div><div class="small">${
-      a.problems.length? a.problems.length+' thing'+(a.problems.length>1?'s':'')+' happened over '+fmtDur(a.activeSec)+' monitored'+noData
-      : 'no drops, spikes or DNS failures across '+fmtDur(a.activeSec)+' monitored'+noData}</div></div></div>`;
+  html+=`<div class="verdict v-${a.verdict.level}" id="${run.id}-ov"><div class="ic">${a.verdict.ic}</div>
+    <div><div class="big">${a.verdict.big}</div>
+    <div class="small">${a.problems.length? a.problems.length+' finding'+(a.problems.length>1?'s':'')+' over '+fmtDur(a.activeSec)+' monitored'+noData : fmtDur(a.activeSec)+' monitored'+noData}</div>
+    <div class="story">${esc(a.narrative.story)}</div>
+    ${a.narrative.actions.length?`<ol class="acts">${a.narrative.actions.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
+    </div></div>`;
 
   html+=`<div class="checks">${a.checks.map(c=>
     `<div class="chk ${c.status}"><div class="cl">${esc(c.label)}</div><div class="cv">${esc(c.value)}</div></div>`).join('')}</div>`;
 
-  // timeline with grey no-data segments where samples stopped (sleep / power off)
-  const tlItems=[]; a.rows.forEach(r=>{ if(r.gapBefore) tlItems.push({gap:true,t:r.t}); tlItems.push(r); });
-  html+=sec('CONNECTIVITY TIMELINE', fmtDur(a.spanSec)+' - each bar = a slice of time',
-    timelineStrip(tlItems, it=>it.gap?'gap':tickStatus(it), MAIN_LEGEND)+latChart(a.rows));
+  html+=sec('TIMELINE','drag on the strip to zoom - double-click to reset',
+    `<div class="stripwrap"><canvas class="strip" id="strip-${run.id}"></canvas></div>
+     <div class="tleg"><i><b class="t-ok"></b> healthy</i><i><b class="t-warn"></b> degraded</i><i><b class="t-bad"></b> down</i><i><b class="t-gap"></b> no data</i>
+       <i style="margin-left:auto"><b style="background:${EVCOLOR.roam}"></b> roam</i><i><b style="background:${EVCOLOR.band}"></b> band switch</i><i><b style="background:${EVCOLOR.disc}"></b> disconnect</i></div>`
+    + registerRunCharts(run), run.id+'-tl');
 
-  // per-service reachability (xledger.net etc.) - each gets its own timeline
+  html+=heatmapHtml(a);
+
   if(a.httpSeries.length){
     html+=sec('SERVICE REACHABILITY', a.httpSeries.length+' service'+(a.httpSeries.length>1?'s':''),
       a.httpSeries.map((h,i)=>{
         const pct = h.reachPct>=99.95?'100%':h.reachPct.toFixed(1)+'%';
         const col = h.fails?'var(--red)':'var(--p)';
         const line=`<p class="line" style="margin-top:${i?16:2}px"><b>${esc(h.host)}</b> - <span style="color:${col}">${pct} reachable</span>${h.avgMs!=null?` - avg ${h.avgMs} ms`:''}${h.fails?` - <span style="color:var(--red)">${h.fails} unreachable</span>`:''}${h.slow?` - ${h.slow} slow`:''}</p>`;
-        return line + timelineStrip(h.samples, svcStatus, i===a.httpSeries.length-1?SVC_LEGEND:'');
-      }).join(''));
+        return line + timelineStripDom(h.samples, svcStatus, i===a.httpSeries.length-1?SVC_LEGEND:'');
+      }).join(''), run.id+'-svc');
   }
 
-  // Wi-Fi link summary - the crux of an AP-distance / roaming investigation
   if(a.onWifi){
-    const r0=a.rows.find(r=>r.band||r.chan||r.rx)||{};
+    const apRows=Object.keys(a.apStats).map(k=>{const s=a.apStats[k];
+      return [esc(pv('bssid',k)), s.share+'%', s.avgSig!=null?s.avgSig+'%':'--', s.minSig!=null?s.minSig+'%':'--',
+        esc(Object.keys(s.bands).join(', ')||'--'), String(s.roamsIn), s.jitHi+s.loss?`<span style="color:var(--amber)">${s.jitHi+s.loss}</span>`:'0'];});
+    const bandRows=Object.keys(a.bandStats).map(b=>{const s=a.bandStats[b];
+      return [esc(b), s.share+'%', s.avgSig!=null?s.avgSig+'%':'--', s.avgJit!=null?s.avgJit+' ms':'--',
+        s.jitHi?`<span style="color:var(--amber)">${s.jitHi}</span>`:'0', s.loss?`<span style="color:var(--amber)">${s.loss}</span>`:'0', s.avgRate!=null?s.avgRate+' Mbps':'--'];});
     html+=sec('WI-FI LINK', a.bands.join(' / ')||'wireless',
-      `<p class="line">Band <b>${esc(a.bands.join(', ')||'?')}</b>${r0.chan?` - channel <b>${r0.chan}</b>`:''}${a.radio?` - <b>${esc(a.radio)}</b>`:''} - signal <b>${a.minSig}-${Math.max(...a.rows.map(r=>r.sig).filter(v=>v!=null))}%</b> (min ${a.minSig}%)</p>
-       <p class="line">Link rate ${a.minRate!=null?`min <b>${a.minRate} Mbps</b>`:'<b>--</b>'}${a.lowRate?` - <span style="color:var(--amber)">${a.lowRate}x under 60 Mbps</span>`:''} - access points seen <b>${a.aps.length}</b> - roams <b style="color:${a.roams?'var(--amber)':'var(--p)'}">${a.roams}</b>${a.roams?` (${a.roamAt.map(t=>esc(clock(t))).join(', ')}${a.roams>a.roamAt.length?' ...':''})`:''}</p>
+      `<p class="line">Signal <b>${a.minSig}-${a.maxSig}%</b>${a.radio?` - <b>${esc(a.radio)}</b>`:''} - roams <b style="color:${a.roams?'var(--amber)':'var(--p)'}">${a.roams}</b>${a.roamCorrPct!=null?` - <b>${a.roamCorrPct}%</b> of degraded moments within 60s of a roam`:''}</p>
        ${a.coChanOthers!=null?`<p class="line">Channel congestion: <b style="color:${a.coChanOthers>=3?'var(--amber)':'var(--p)'}">${a.coChanOthers}</b> other network${a.coChanOthers===1?'':'s'} on channel ${a.congChan}${a.nbrTotalMax!=null?` - ${a.nbrTotalMax} APs nearby in total`:''}</p>`:''}
-       ${a.wlanDiscs&&a.wlanDiscs.length?`<p class="line">Windows disconnect log: <b style="color:var(--amber)">${a.wlanDiscs.length}</b> - ${esc(a.topReasons.map(([r,n])=>r+' ('+n+'x)').join(', '))}</p>`:''}
        ${a.adapter?`<p class="line dim">Adapter: ${esc(a.adapter.description||a.adapter.name||'?')}${a.adapter.driverVersion?` - driver ${esc(a.adapter.driverVersion)}`:''}${a.adapter.driverDate?` (${esc(a.adapter.driverDate)})`:''}${a.pmSuspend?` - <span style="color:var(--amber)">power saving on</span>`:''}</p>`:''}
        ${a.bssidHidden?`<p class="line dim">Windows hid the AP identity during this run (Location off) - roam detection was limited.</p>`:''}
-       ${a.on5&&!a.on24?`<p class="line dim">On 5 GHz only - shorter range than 2.4 GHz; relevant if the AP is far.</p>`:''}`);
+       ${apRows.length?`<p class="line dim" style="margin-top:12px">Per access point</p>`+table(['AP','Time share','Avg sig','Min sig','Bands','Roams','Bad ticks'],apRows):''}
+       ${bandRows.length>1?`<p class="line dim" style="margin-top:12px">Per band</p>`+table(['Band','Time share','Avg sig','Avg jitter','Jit>=30','Loss ticks','Avg rate'],bandRows):''}`,
+      run.id+'-wifi');
   }
 
-  if(a.problems.length){
-    html+=sec('WHAT HAPPENED','prioritized', a.problems.map(p=>
-      `<div class="prob ${p.level}"><span class="pt">${p.level==='bad'?'Fix':'Check'}</span>
-        <div><b>${esc(p.title)}</b>${p.when?` <span class="when">${esc(p.when)}</span>`:''} - ${esc(p.detail)}${p.fix?`<div class="pfix">${esc(p.fix)}</div>`:''}</div></div>`).join(''));
-  } else {
-    html+=sec('WHAT HAPPENED','', `<div class="prob ok"><span class="pt">OK</span>
-      <div><b>Nothing went wrong while monitoring.</b> Connection stayed up with steady latency and healthy DNS${a.httpSeries.length?`, and every watched service (${esc(a.httpSeries.map(h=>h.host).join(', '))}) stayed reachable`:''}. If your problem didn't reproduce, leave the monitor running longer to catch it.</div></div>`);
-  }
+  const probHtml = a.problems.length ? a.problems.map((p,i)=>{
+    const wl=whenLabel(p.times);
+    const occ = p.times.length>2 ? `<details class="occ"><summary>all ${p.times.length} times</summary>${p.times.map(t=>esc(fmtTime(t))).join(' - ')}</details>` : '';
+    return `<div class="prob ${p.level}" id="pf-${run.id}-${i}" onclick="focusFinding('${run.id}',${i})" title="Click to filter the samples table to these moments">
+      <span class="pt">${p.level==='bad'?'Fix':'Check'}</span>
+      <div><b>${esc(p.title)}</b>${wl?` <span class="when">${esc(wl)}</span>`:''} - ${esc(p.detail)}${p.fix?`<div class="pfix">${esc(p.fix)}</div>`:''}${occ}</div></div>`;
+  }).join('') : `<div class="prob ok" style="cursor:default"><span class="pt">OK</span>
+      <div><b>Nothing went wrong while monitoring.</b> Connection stayed up with steady latency and healthy DNS${a.httpSeries.length?`, and every watched service stayed reachable`:''}. If your problem didn't reproduce, leave the monitor running longer.</div></div>`;
+  html+=sec('WHAT HAPPENED','click a finding to see its samples',probHtml, run.id+'-find');
 
-  // ---- breakdown drawer ----
+  // data section
   let raw='';
   if(a.outages.length){
     const hasTrace = a.outages.some(o=>o.trace&&o.trace.length);
@@ -939,73 +1264,339 @@ function renderMonitor(meta, ticks){
     raw+=sec('OUTAGE LOG',`${a.outages.length} event${a.outages.length>1?'s':''}`, table(oHead,
       a.outages.map(o=>{ const c=[esc(fmtTime(o.start)),esc(fmtTime(o.end)),fmtDur(o.count*a.interval),o.count];
         if(hasTrace) c.push(o.trace&&o.trace.length?esc(o.trace.join(' > ')):'--'); return c; })));
-  }
-  if(a.gapList&&a.gapList.length){
+  } else raw+=sec('OUTAGE LOG','', `<p class="empty">No full outages recorded.</p>`);
+  if(a.gapList.length){
     raw+=sec('NO-DATA GAPS',`${a.gapList.length} gap${a.gapList.length>1?'s':''} (machine asleep or off)`, table(['Last sample before gap','Missing'],
       a.gapList.map(g=>[esc(fmtTime(g.t)),fmtDur(g.dur)])));
   }
-  if(a.wlanDiscs&&a.wlanDiscs.length){
-    raw+=sec('WI-FI DISCONNECT LOG',`${a.wlanDiscs.length} event${a.wlanDiscs.length>1?'s':''} (Windows WLAN-AutoConfig)`, table(['Time','Reason'],
-      a.wlanDiscs.slice(-100).map(e=>[esc(fmtTime(e.t)),esc(String(e.msg||'').replace(/^disconnect:?\s*/,'')||'unspecified')])));
-  }
+  raw+=sec('WI-FI DISCONNECT LOG', a.wlanDiscs.length? `${a.wlanDiscs.length} event${a.wlanDiscs.length>1?'s':''} (Windows WLAN-AutoConfig)`:'',
+    a.wlanDiscs.length ? table(['Time','Reason'], a.wlanDiscs.slice(-100).map(e=>[esc(fmtTime(e.t)),esc(String(e.msg||'').replace(/^disconnect:?\s*/,'')||'unspecified')]))
+      : `<p class="empty">No hard disconnects recorded by Windows - transitions were clean roams${a.bssidHidden?' (note: Location was off)':''}.</p>`);
   raw+=sec('SESSION STATS','',
     `<p class="line">uptime <b>${a.uptimePct.toFixed(2)}%</b> - offline <b>${fmtDur(a.totalDownSec)}</b>${a.noDataSec>600?` - no data <b>${fmtDur(a.noDataSec)}</b>`:''} - avg latency <b>${a.avgLat!=null?a.avgLat.toFixed(0)+' ms':'--'}</b> - p95 <b>${a.p95!=null?a.p95+' ms':'--'}</b> - spikes <b>${a.spikes}</b></p>`+
-    (a.ethRows&&a.ethRows.length?`<p class="line">wired link: <b>${a.ethMax} Mbps</b>${a.ethDowngraded?` - <span style="color:var(--amber)">dropped to ${a.ethMin} Mbps (${a.ethShifts.length} change${a.ethShifts.length>1?'s':''})</span>`:''}</p>`:'')+
+    (a.ethRows.length?`<p class="line">wired link: <b>${a.ethMax} Mbps</b>${a.ethDowngraded?` - <span style="color:var(--amber)">dropped to ${a.ethMin} Mbps (${a.ethShifts.length} change${a.ethShifts.length>1?'s':''})</span>`:''}</p>`:'')+
     (a.hasQ?`<p class="line">packet loss: <b>${a.lossTicks}</b> check(s) with loss - avg <b>${a.avgLoss!=null?a.avgLoss.toFixed(1):'0'}%</b> - peak <b>${a.maxLoss!=null?a.maxLoss:0}%</b> - jitter avg <b>${a.avgJit!=null?a.avgJit:'--'} ms</b> - peak <b>${a.maxJit!=null?a.maxJit:'--'} ms</b></p>`:'')+
-    (a.gwUsable?`<p class="line">gateway ${esc(meta.gateway||'')}: reachable <b>${a.gwReachPct!=null?a.gwReachPct.toFixed(1)+'%':'--'}</b>${a.gwAvg!=null?` - avg <b>${a.gwAvg} ms</b>`:''} - drops-while-up <b>${a.gwDropWhileUp}</b></p>`
-      :(meta.gateway?`<p class="line dim">gateway ${esc(meta.gateway)} never answered ping (blocks ICMP) - gateway-hop signal unavailable.</p>`:''))+
+    (a.gwUsable?`<p class="line">gateway ${esc(pv('ip',meta.gateway||''))}: reachable <b>${a.gwReachPct!=null?a.gwReachPct.toFixed(1)+'%':'--'}</b>${a.gwAvg!=null?` - avg <b>${a.gwAvg} ms</b>`:''} - drops-while-up <b>${a.gwDropWhileUp}</b></p>`
+      :(meta.gateway?`<p class="line dim">gateway ${esc(pv('ip',meta.gateway))} never answered ping (blocks ICMP) - gateway-hop signal unavailable.</p>`:''))+
     `<p class="line">DNS avg <b>${a.dnsAvg!=null?a.dnsAvg+' ms':'--'}</b> - DNS fails <b>${a.dnsFails}</b> - DNS servers <b>${esc((meta.dnsServers||[]).join(', ')||'unknown')}</b></p>`+
-    (a.onWifi?`<p class="line">Wi-Fi: band <b>${esc(a.bands.join(', ')||'?')}</b> - min signal <b>${a.minSig}%</b> - min rate <b>${a.minRate!=null?a.minRate+' Mbps':'--'}</b> - APs <b>${a.aps.length}</b> - roams <b>${a.roams}</b></p>`:'')+
     a.httpSeries.map(h=>`<p class="line">${esc(h.host)}: reachable <b>${h.reachPct>=99.95?'100%':h.reachPct.toFixed(2)+'%'}</b>${h.avgMs!=null?` - avg <b>${h.avgMs} ms</b>`:''} - unreachable <b>${h.fails}</b>${h.slow?` - slow <b>${h.slow}</b>`:''}</p>`).join(''));
 
-  const cap=900, total=a.rows.length, startIdx=total>cap?total-cap:0;
+  html+=sec('DATA','filter and page through every sample',
+    `<div class="tbar">
+      <select id="sf-${run.id}" onchange="sampleCtl('${run.id}','filter')">
+        <option value="all">All samples</option><option value="deg">Degraded only</option>
+        <option value="loss">Loss</option><option value="jit">Jitter &gt;= 30</option>
+        <option value="down">Down</option><option value="roam">Near a roam</option>
+        <option value="focus" hidden>Finding focus</option>
+      </select>
+      <input id="ss-${run.id}" placeholder="search (time, AP, band...)" oninput="sampleCtl('${run.id}','search')">
+      <span class="muted" id="sn-${run.id}"></span>
+    </div>
+    <div id="st-${run.id}"></div>
+    <div class="pgr"><button class="btn sm" onclick="sampleCtl('${run.id}','prev')">Prev</button>
+    <span id="sp-${run.id}"></span>
+    <button class="btn sm" onclick="sampleCtl('${run.id}','next')">Next</button></div>`
+    + raw, run.id+'-data');
+  html+='</section>';
+  return html;
+}
+
+/* samples table with filter + search + pagination */
+const PAGE=400;
+function sampleRowsFor(run){
+  const a=run.a, f=run.sf||'all', s=(run.ss||'').toLowerCase();
+  let rows=a.rows.map((r,i)=>({r,i}));
+  if(f==='deg') rows=rows.filter(x=>tickStatus(x.r)!=='ok');
+  else if(f==='loss') rows=rows.filter(x=>x.r.loss!=null&&x.r.loss>0);
+  else if(f==='jit') rows=rows.filter(x=>x.r.jit!=null&&x.r.jit>=30);
+  else if(f==='down') rows=rows.filter(x=>x.r.down);
+  else if(f==='roam'){ const rt=a.roamPairs.map(p=>p.tms); rows=rows.filter(x=>rt.some(t=>Math.abs(t-x.r.tms)<=30000)); }
+  else if(f==='focus'&&run.focusTimes){ const ft=run.focusTimes; rows=rows.filter(x=>ft.some(t=>Math.abs(t-x.r.tms)<=30000)); }
+  if(s) rows=rows.filter(x=>{
+    const r=x.r; const hay=(fmtTime(r.t)+' '+(r.bssid||'')+' '+(r.band||'')+' '+(pv('bssid',r.bssid||''))).toLowerCase();
+    return hay.indexOf(s)>=0; });
+  return rows;
+}
+function renderSamples(run){
+  const a=run.a, ticks=run.ticks;
+  const el=document.getElementById('st-'+run.id); if(!el) return;
+  const all=sampleRowsFor(run);
+  const pages=Math.max(1,Math.ceil(all.length/PAGE));
+  run.page=Math.max(0,Math.min(run.page||0,pages-1));
+  const slice=all.slice(run.page*PAGE,(run.page+1)*PAGE);
   const amb=(v,t,suf='')=>v==null?'--':(t?`<span style="color:var(--amber)">${v}${suf}</span>`:v+suf);
   const headers=['Time'];
   if(a.gwUsable) headers.push('GW');
   headers.push(...a.targets);
   if(a.hasQ) headers.push('Loss','Jit');
   headers.push('DNS');
-  if(a.onWifi) headers.push('Sig','Rate');
+  if(a.onWifi) headers.push('Sig','Rate','AP');
   headers.push(...a.httpSeries.map(h=>h.host),'Up');
-  const sampleRows=[];
-  for(let i=startIdx;i<total;i++){
-    const r=a.rows[i], tk=ticks[i]||{};
+  const rowsH=slice.map(x=>{
+    const r=x.r, tk=ticks[x.i]||{};
     const cells=[`<span style="color:var(--p-dim)">${esc(fmtTime(r.t))}</span>`];
     if(a.gwUsable) cells.push(r.gw==null?'--':(r.gw<0?'<span class="st-down">DOWN</span>':r.gw+' ms'));
     a.targets.forEach(t=>{ const v=tk[t]; cells.push(v===-1?'<span class="st-down">timeout</span>':(typeof v==='number'?v+' ms':'--')); });
     if(a.hasQ){ cells.push(r.loss==null?'--':amb(r.loss,r.loss>0,'%')); cells.push(r.jit==null?'--':amb(r.jit,r.jit>=30,' ms')); }
     cells.push(r.dns===-1?'<span class="st-down">FAIL</span>':(r.dns>=300?`<span style="color:var(--amber)">${r.dns} ms</span>`:(r.dns!=null?r.dns+' ms':'--')));
-    if(a.onWifi){ cells.push(r.sig!=null?amb(r.sig,r.sig<40,'%'):'--'); cells.push(r.rx!=null?amb(r.rx,r.rx<60,''):'--'); }
-    a.httpSeries.forEach(h=>{ const hh=(Array.isArray(tk.http)?tk.http:[]).find(x=>x.u===h.url)||{}; const ms=typeof hh.ms==='number'?hh.ms:null;
+    if(a.onWifi){ cells.push(r.sig!=null?amb(r.sig,r.sig<40,'%'):'--'); cells.push(r.rx!=null?amb(r.rx,r.rx<60,''):'--');
+      cells.push(r.bssid?`<span class="muted">${esc(pv('bssid',r.bssid))}</span>`:'--'); }
+    a.httpSeries.forEach(h=>{ const hh=(Array.isArray(tk.http)?tk.http:[]).find(x2=>x2.u===h.url)||{}; const ms=typeof hh.ms==='number'?hh.ms:null;
       if(ms==null||ms<0) cells.push('<span class="st-down">DOWN</span>');
       else cells.push((ms>=HTTP_SLOW?`<span style="color:var(--amber)">${ms} ms</span>`:ms+' ms')+(hh.code&&hh.code>=400?` <span style="color:var(--p-dim)">(${hh.code})</span>`:'')); });
     cells.push(r.down?'<span class="st-down">DOWN</span>':(r.gwBad?'<span style="color:var(--amber)">gw</span>':'<span class="st-up">up</span>'));
-    sampleRows.push(cells);
+    return cells;
+  });
+  el.innerHTML=table(headers,rowsH);
+  const sn=document.getElementById('sn-'+run.id); if(sn) sn.textContent=all.length+' of '+a.rows.length+' samples';
+  const sp=document.getElementById('sp-'+run.id); if(sp) sp.textContent='page '+(run.page+1)+' / '+pages;
+}
+function sampleCtl(id,act){
+  const run=runById(id); if(!run) return;
+  if(act==='filter'){ run.sf=document.getElementById('sf-'+id).value; run.page=0; if(run.sf!=='focus'){ run.focusTimes=null; clearFocusHl(run); } }
+  if(act==='search'){ run.ss=document.getElementById('ss-'+id).value; run.page=0; }
+  if(act==='prev') run.page=(run.page||0)-1;
+  if(act==='next') run.page=(run.page||0)+1;
+  renderSamples(run);
+}
+function clearFocusHl(run){ document.querySelectorAll('#'+run.id+' .prob.focus').forEach(e=>e.classList.remove('focus')); }
+function focusFinding(id,idx){
+  const run=runById(id); if(!run) return;
+  const p=run.a.problems[idx]; if(!p||!p.times.length) return;
+  clearFocusHl(run);
+  const el=document.getElementById('pf-'+id+'-'+idx); if(el) el.classList.add('focus');
+  run.focusTimes=p.times.map(t=>+new Date(t));
+  run.sf='focus'; run.page=0;
+  const sel=document.getElementById('sf-'+id); if(sel) sel.value='focus';
+  renderSamples(run);
+  const d=document.getElementById(id+'-data'); if(d) d.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ---------- compare ---------- */
+function compareHtml(mons){
+  const met=(label,fn,better)=>({label,vals:mons.map(m=>fn(m.a)),better});
+  const ms=[
+    met('Uptime',a=>a.uptimePct,'hi'),
+    met('Outages',a=>a.outages.length,'lo'),
+    met('Loss ticks',a=>a.lossTicks||0,'lo'),
+    met('Jitter p95/max',a=>a.maxJit!=null?(a.avgJit+' / '+a.maxJit+' ms'):null,null),
+    met('Jit>=30 per day',a=>a.jitHigh?+(a.jitHigh/a.activeDays).toFixed(1):0,'lo'),
+    met('Avg latency',a=>a.avgLat!=null?+a.avgLat.toFixed(0):null,'lo'),
+    met('Min Wi-Fi signal',a=>a.minSig,'hi'),
+    met('Roams per day',a=>a.roams?+(a.roams/a.activeDays).toFixed(1):0,'lo'),
+    met('Disconnects',a=>a.wlanDiscs.length,'lo'),
+    met('DNS fails',a=>a.dnsFails,'lo'),
+  ];
+  const fmtv=(m,v)=>{ if(v==null) return '--';
+    if(m.label==='Uptime') return v.toFixed(v>=99.99?0:2)+'%';
+    if(m.label==='Min Wi-Fi signal') return v+'%';
+    if(m.label==='Avg latency') return v+' ms';
+    return String(v); };
+  const rows=ms.map(m=>{
+    let win=-1;
+    if(m.better&&m.vals.every(v=>typeof v==='number')){
+      const best=m.better==='hi'?Math.max(...m.vals):Math.min(...m.vals);
+      const worst=m.better==='hi'?Math.min(...m.vals):Math.max(...m.vals);
+      if(best!==worst) win=m.vals.indexOf(best);
+    }
+    return `<tr><td>${esc(m.label)}</td>${m.vals.map((v,i)=>
+      `<td class="${win<0?'':(i===win?'win':'lose')}">${esc(fmtv(m,v))}</td>`).join('')}</tr>`;
+  }).join('');
+  const heads=mons.map(m=>`<th><span class="runchip"><b style="background:${RUNCOLORS[m.ci%4]}"></b>${esc(pv('host',m.meta.computerName||m.name))}</span></th>`).join('');
+  let html=sec('COMPARE','side by side - green = better',
+    `<div class="scroll delta"><table><thead><tr><th>Metric</th>${heads}</tr></thead><tbody>${rows}</tbody></table></div>`,'cmp');
+
+  // overlay charts when the runs overlap in time
+  const t0=Math.max(...mons.map(m=>m.a.t0)), t1=Math.min(...mons.map(m=>m.a.t1));
+  const shorter=Math.min(...mons.map(m=>m.a.t1-m.a.t0));
+  if(t1>t0 && (t1-t0)>=0.3*shorter){
+    html+=sec('OVERLAP - SAME CLOCK','both runs during the overlapping window',
+      `<div class="chartwrap"><span class="chartlbl">latency ms</span><canvas class="base" id="cmp-lat"></canvas></div>
+       <div class="chartwrap"><span class="chartlbl">Wi-Fi signal %</span><canvas class="base" id="cmp-sig"></canvas>
+       <div class="axis" id="ax-cmp"></div></div>
+       <div class="tleg">${mons.map(m=>`<i><span class="runchip"><b style="background:${RUNCOLORS[m.ci%4]}"></b>${esc(pv('host',m.meta.computerName||m.name))}</span></i>`).join('')}</div>`);
+    CHARTQ.push({runId:'cmp', draw:()=>{
+      const c1=document.getElementById('cmp-lat'), c2=document.getElementById('cmp-sig');
+      if(c1) drawChart(c1,{h:110,t0,t1,unit:'ms',series:mons.map(m=>({color:RUNCOLORS[m.ci%4],pts:m.a.rows.map(r=>[r.tms,r.best])})),thresholds:[{v:120,color:'rgba(245,158,11,.6)'}]});
+      if(c2) drawChart(c2,{h:110,t0,t1,unit:'%',yMin:100,series:mons.map(m=>({color:RUNCOLORS[m.ci%4],pts:m.a.rows.map(r=>[r.tms,r.sig])}))});
+      const ax=document.getElementById('ax-cmp'); if(ax) ax.innerHTML='<span>'+esc(fmtTime(t0))+'</span><span>'+esc(fmtTime(t1))+'</span>';
+    }});
   }
-  raw+=sec('ALL SAMPLES', total>cap?`last ${cap} of ${total}`:`${total} rows`, table(headers, sampleRows));
-
-  html+=`<details><summary>Full breakdown (${a.outages.length} outages - ${a.httpSeries.reduce((n,h)=>n+h.fails,0)} service failures - ${total} samples)</summary>${raw}</details>`;
-
-  out.innerHTML=html;
-  window.scrollTo({top:0,behavior:'smooth'});
+  return html;
 }
 
-function fmtDate(s){ try{ return new Date(s).toLocaleString(); }catch{ return s||''; } }
-function fmtTime(s){ try{ const d=new Date(s);
-  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }
-  catch{ return s||''; } }
-
-/* Self-contained report bootstrap. The "download" produces a .ps1 that, on stop,
-   injects its data here and opens this file - auto-rendering the report. */
-window.NWA_EMBEDDED = window.NWA_EMBEDDED || null;
-if (Array.isArray(window.NWA_EMBEDDED) && window.NWA_EMBEDDED.length) {
-  try {
-    const _d = window.NWA_EMBEDDED, _m = _d[0];
-    const _ia = document.getElementById('intake'); if (_ia) _ia.style.display = 'none';
-    if (_m && typeof _m.schema === 'string' && _m.schema.indexOf('nwa-monitor') === 0) renderMonitor(_m, _d.slice(1));
-    else if (_m) render(_m);
-  } catch (e) { console.error(e); }
+/* ---------- snapshot (one-shot report) ---------- */
+function snapshotHtml(run){
+  const d=run.data, sys=d.system||{}, dg=diagnose(d);
+  run.dg=dg;
+  let html=`<section id="${run.id}" class="runblock">`;
+  html+=`<div class="runhead" style="border-left-color:${RUNCOLORS[run.ci%4]}">
+    <span class="runchip"><b style="background:${RUNCOLORS[run.ci%4]}"></b>${esc(pv('host',sys.computerName||'?'))}</span>
+    <span class="muted">snapshot - ${esc(fmtDate(d.generatedAt))}</span>${vpill(dg.verdict.level)}</div>`;
+  html+=`<div class="verdict v-${dg.verdict.level}"><div class="ic">${dg.verdict.ic}</div>
+    <div><div class="big">${dg.verdict.big}</div>
+    <div class="small">${dg.problems.length? dg.problems.length+' thing'+(dg.problems.length>1?'s':'')+' to look at' : 'all checks passed - nothing to fix'}</div></div></div>`;
+  html+=`<div class="checks">${dg.checks.map(c=>
+    `<div class="chk ${c.status}"><div class="cl">${esc(c.label)}</div><div class="cv">${esc(c.value)}</div></div>`).join('')}</div>`;
+  if(dg.problems.length){
+    html+=sec('WHAT TO LOOK AT','prioritized', dg.problems.map(p=>
+      `<div class="prob ${p.level}" style="cursor:default"><span class="pt">${p.level==='bad'?'FIX':p.level==='warn'?'CHECK':'OK'}</span>
+        <div><b>${esc(p.title)}</b> - ${esc(p.detail)}${p.fix?`<div class="pfix">${esc(p.fix)}</div>`:''}</div></div>`).join(''));
+  } else {
+    html+=sec('WHAT TO LOOK AT','', `<div class="prob ok" style="cursor:default"><span class="pt">OK</span>
+      <div><b>Your connection looks healthy.</b> Internet is reachable, latency is fine, and DNS is resolving normally. If you're still seeing trouble it's likely app- or website-specific, not your network.</div></div>`);
+  }
+  let raw='';
+  raw+=sec('INTERFACES','adapters + ip', table(['Name','Status','Type','Link','IPv4','Gateway','MAC'],
+    (d.adapters||[]).map(ad=>{
+      const ip=(d.ipConfig||[]).find(c=>c.alias===ad.name)||{};
+      const upd=ad.status==='Up';
+      return [esc(ad.name),`<span class="${upd?'st-up':'st-down'}">[${upd?'UP':esc((ad.status||'').toUpperCase())}]</span>`,
+        esc(ad.mediaType),esc(ad.linkSpeed),esc(pv('ip',ip.ipv4||'--')),esc(pv('ip',ip.gateway||'--')),esc(ANON?'--':(ad.macAddress||'--'))];
+    })));
+  let net=`<p class="line dim">ping - 4 packets each</p>`+table(['Target','Loss','Avg','Min','Max'],
+    (d.latency||[]).map(l=>[esc(l.target),`${l.lossPct}%`,
+      l.avgMs!=null?l.avgMs+' ms':'--',l.minMs!=null?l.minMs+' ms':'--',l.maxMs!=null?l.maxMs+' ms':'--']));
+  net+=`<p class="line dim" style="margin-top:12px">DNS resolution time</p>`+table(['Host','Time','Resolved','Addresses'],
+    (d.dnsTest||[]).map(t=>[esc(t.host),t.ms+' ms',
+      t.resolved?'<span class="st-up">yes</span>':'<span class="st-down">NO</span>',esc((t.addresses||[]).join(', ')||'--')]));
+  const dnsServers=[...new Set((d.dns||[]).flatMap(x=>x.servers||[]))];
+  if(dnsServers.length) net+=`<p class="line">resolvers in use: <b>${esc(dnsServers.join('  '))}</b></p>`;
+  raw+=sec('LATENCY / DNS','reachability',net);
+  if(d.wifi && Object.keys(d.wifi).filter(k=>k!=='raw').length){
+    const w=d.wifi; const keys=['SSID','BSSID','Signal','Band','Channel','Radio type','Receive rate (Mbps)','Transmit rate (Mbps)','Authentication','State'];
+    raw+=sec('WIRELESS LINK',esc(pv('ssid',w.SSID||'')),table(['Property','Value'],keys.filter(k=>w[k]!=null).map(k=>{
+      let v=w[k]; if(k==='SSID') v=pv('ssid',v); if(k==='BSSID'||k==='AP BSSID') v=pv('bssid',v);
+      return [esc(k),`<b>${esc(v)}</b>`];})));
+  }
+  const totRx=(d.adapterStats||[]).reduce((s,b)=>s+(b.receivedBytes||0),0);
+  const totTx=(d.adapterStats||[]).reduce((s,b)=>s+(b.sentBytes||0),0);
+  raw+=sec('TRAFFIC SINCE BOOT','counters',
+    `<p class="line">downloaded <b>${bytes(totRx)}</b> - uploaded <b>${bytes(totTx)}</b> - uptime <b>${num(sys.uptimeHours,1)} h</b> - public IP <b>${esc(pv('ip',d.publicIp||'--'))}</b></p>`);
+  const talk={};
+  (d.connections||[]).forEach(c=>{ const k=(c.process||'?')+' -> '+c.remoteAddress;
+    talk[k]=talk[k]||{process:c.process,remote:c.remoteAddress,port:c.remotePort,n:0}; talk[k].n++; });
+  const talkers=Object.values(talk).sort((x,y)=>y.n-x.n).slice(0,40);
+  raw+=sec('OUTBOUND SESSIONS',`${(d.connections||[]).length} active`,table(['Process','Remote','Port','Conns'],
+    talkers.map(t=>[esc(t.process||'?'),esc(t.remote),esc(t.port),t.n])));
+  raw+=sec('LISTENING PORTS',`${(d.listening||[]).length} sockets`,table(['Address','Port','Process','PID'],
+    (d.listening||[]).map(p=>[esc(p.localAddress),esc(p.localPort),esc(p.process||'?'),esc(p.pid)])));
+  const evs=(d.events||[]);
+  raw+=sec('EVENT LOG',`last ${d.hoursWindow||24}h`, evs.length?table(['Time','Level','Source','Message'],
+    evs.map(e=>[`<span style="color:var(--p-dim)">${esc(fmtTime(e.time))}</span>`,
+      `<span class="lvl L${esc((e.level||'').toLowerCase())}">${esc(e.level||'')}</span>`,
+      esc((e.provider||'').split('-').pop()),
+      `<span style="white-space:normal">${esc((e.message||'').slice(0,160))}</span>`])):`<p class="empty">No events in the window.</p>`);
+  html+=`<details><summary>Show raw diagnostic data (${(d.adapters||[]).length} interfaces - ${(d.connections||[]).length} connections - ${evs.length} events)</summary>${raw}</details>`;
+  html+='</section>';
+  return html;
 }
+
+/* ---------- top-level render ---------- */
+function renderAll(){
+  if(!RUNS.length){ newScan(); return; }
+  CHARTQ=[]; Object.keys(HOVER).forEach(k=>delete HOVER[k]);
+  RUNS.forEach((r,i)=>{ r.id='r'+i; r.ci=i; });
+  const mons=RUNS.filter(r=>r.kind==='monitor'), snaps=RUNS.filter(r=>r.kind==='snapshot');
+  let html='';
+  if(mons.length>1) html+=compareHtml(mons);
+  mons.forEach(r=>{ html+=monitorHtml(r); });
+  snaps.forEach(r=>{ html+=snapshotHtml(r); });
+  const out=$('#out');
+  out.innerHTML=html; out.style.display='block';
+  $('#intake').style.display='none';
+  // sticky bar
+  const sv=RUNS.map(r=>{
+    const lvl=r.kind==='monitor'?r.a.verdict.level:(r.dg?r.dg.verdict.level:'ok');
+    const nm=r.kind==='monitor'?pv('host',r.meta.computerName||r.name):pv('host',(r.data.system||{}).computerName||r.name);
+    return `<a href="#${r.id}" class="runchip" style="text-decoration:none;color:var(--text)"><b style="background:${RUNCOLORS[r.ci%4]}"></b>${esc(nm)} ${vpill(lvl)}</a>`;
+  }).join(' ');
+  $('#stickyVerdicts').innerHTML=sv;
+  const nav=[]; if(mons.length>1) nav.push('<a href="#cmp">Compare</a>');
+  const r0=mons[0]||RUNS[0];
+  if(r0 && r0.kind==='monitor') nav.push(`<a href="#${r0.id}-tl">Timeline</a>`,`<a href="#${r0.id}-wifi">Wi-Fi</a>`,`<a href="#${r0.id}-find">Findings</a>`,`<a href="#${r0.id}-data">Data</a>`);
+  $('#stickyNav').innerHTML=nav.join('');
+  $('#sticky').style.display='block';
+  const ab=$('#anonBtn'); if(ab) ab.classList.toggle('on',ANON);
+  // draw + wire (setTimeout, not rAF - rAF stalls in background tabs)
+  setTimeout(()=>{ drawAllCharts(); mons.forEach(r=>{ wireHover(r); renderSamples(r); }); }, 0);
+  window.scrollTo({top:0,behavior:'auto'});
+}
+let _rsz=null;
+window.addEventListener('resize',()=>{ if(!RUNS.length) return; clearTimeout(_rsz); _rsz=setTimeout(drawAllCharts,200); });
+
+/* ---------- copy summary ---------- */
+function copySummary(btn){
+  const L=[];
+  RUNS.forEach(r=>{
+    if(r.kind==='monitor'){
+      const a=r.a, host=pv('host',r.meta.computerName||r.name);
+      L.push('== '+host+' - '+fmtDate(a.startT)+' -> '+fmtTime(a.endT)+' ('+a.N+' samples) ==');
+      L.push('Verdict: '+a.verdict.big);
+      L.push(a.narrative.story);
+      L.push('Uptime '+a.uptimePct.toFixed(2)+'% - outages '+a.outages.length+' ('+fmtDur(a.totalDownSec)+') - avg latency '+(a.avgLat!=null?a.avgLat.toFixed(0)+' ms':'--')
+        +(a.hasQ?' - loss ticks '+a.lossTicks+' - jitter peak '+(a.maxJit!=null?a.maxJit+' ms':'--'):'')
+        +(a.onWifi?' - signal '+a.minSig+'-'+a.maxSig+'% - roams '+a.roams:''));
+      a.problems.slice(0,6).forEach(p=>{ const wl=whenLabel(p.times); L.push('- ['+p.level.toUpperCase()+'] '+p.title+(wl?' ('+wl+')':'')); });
+      if(a.narrative.actions.length){ L.push('Next steps:'); a.narrative.actions.forEach((x,i)=>L.push('  '+(i+1)+'. '+x)); }
+      L.push('');
+    } else if(r.dg){
+      const host=pv('host',(r.data.system||{}).computerName||r.name);
+      L.push('== '+host+' - snapshot '+fmtDate(r.data.generatedAt)+' ==');
+      L.push('Verdict: '+r.dg.verdict.big);
+      r.dg.problems.forEach(p=>L.push('- ['+p.level.toUpperCase()+'] '+p.title));
+      L.push('');
+    }
+  });
+  const mons=RUNS.filter(r=>r.kind==='monitor');
+  if(mons.length>1){
+    L.push('== Compare ==');
+    mons.forEach(m=>{ const a=m.a;
+      L.push(pv('host',m.meta.computerName||m.name)+': uptime '+a.uptimePct.toFixed(2)+'%, min signal '+(a.minSig!=null?a.minSig+'%':'--')
+        +', roams/day '+(a.roams?(a.roams/a.activeDays).toFixed(1):'0')+', jitter peak '+(a.maxJit!=null?a.maxJit+' ms':'--')); });
+  }
+  const txt=L.join('\n');
+  navigator.clipboard.writeText(txt).then(()=>{ if(btn){ const t=btn.textContent; btn.textContent='Copied'; setTimeout(()=>btn.textContent=t,1600); } })
+    .catch(()=>{ console.log(txt); alert('Copy failed - summary printed to console.'); });
+}
+
+/* ---------- export: a data-carrying copy of this page ---------- */
+function exportReport(){
+  const payload=JSON.stringify({v:2,runs:RUNS.map(r=>r.kind==='monitor'
+    ?{kind:'monitor',name:r.name,meta:r.meta,ticks:r.ticks}
+    :{kind:'snapshot',name:r.name,data:r.data})}).replace(/</g,'\\u003c');
+  const SENT=' /*NWA_'+'DATA*/';
+  const si=PAGE_SRC.indexOf(SENT);
+  let html;
+  const assign='window.NWA_EMBEDDED = ';
+  if(si>=0){
+    const ai=PAGE_SRC.lastIndexOf(assign, si);
+    if(ai>=0) html=PAGE_SRC.slice(0,ai)+assign+payload+';'+PAGE_SRC.slice(si);
+  }
+  if(!html){ alert('Export failed: template sentinel not found.'); return; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+  a.download='network-report.html'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// pristine page source (all scripts now present) - used by Export to build a data-carrying copy
+const PAGE_SRC = '<!doctype html>\n' + document.documentElement.outerHTML;
+
+/* ---------- embedded-data bootstrap (reports generated by nwa.ps1 / Export) ---------- */
+window.NWA_EMBEDDED = window.NWA_EMBEDDED || null; /*NWA_DATA*/
+try{
+  const E=window.NWA_EMBEDDED;
+  if(Array.isArray(E) && E.length){                     // legacy: one run as [meta, ...ticks] or [snapshot]
+    const m=E[0]||{};
+    if(String(m.schema||'').indexOf('nwa-monitor')===0) pushMonitor('embedded log', m, E.slice(1));
+    else RUNS.push({kind:'snapshot', name:'embedded report', data:m});
+    renderAll();
+  } else if(E && E.v===2 && Array.isArray(E.runs)){     // v2: multiple runs
+    E.runs.forEach(r=>{ if(r.kind==='monitor') pushMonitor(r.name||'log', r.meta, r.ticks||[]);
+      else RUNS.push({kind:'snapshot', name:r.name||'report', data:r.data}); });
+    renderAll();
+  }
+}catch(e){ console.error(e); }
 </script>
 </body>
 </html>
