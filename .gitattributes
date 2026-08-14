@@ -1,0 +1,9 @@
+# nwa.ps1 is generated from index.html + src/nwa.src.ps1 by build.ps1, and CI
+# rebuilds it to prove the committed copy is current. That check only holds if
+# every machine checks the sources out byte-for-byte identically, so pin LF
+# instead of letting Windows autocrlf rewrite them.
+* text=auto eol=lf
+
+# Captured logs and reports are data, never text to normalise.
+*.jsonl -text
+*.pdf binary
