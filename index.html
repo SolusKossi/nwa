@@ -715,8 +715,10 @@ function analyzeMonitor(meta, ticks){
       outages.map(o=>o.start));
   }
   if(icmpOnlyRows.length){
+    const proof = meta.httpTargets && meta.httpTargets.length
+      ? 'a watched site still responded' : 'an off-LAN DNS lookup still succeeded';
     P('warn', `ICMP failed ${icmpOnlyRows.length}x, but the outage was not confirmed`,
-      'Both internet ping targets timed out while DNS still resolved. This can be an ICMP policy/filter rather than a real loss of internet access, so these moments are not counted as downtime.',
+      `Both internet ping targets timed out while ${proof} - so traffic was still crossing the internet. That points at an ICMP policy/filter rather than a real loss of connectivity, and these moments are not counted as downtime.`,
       'If users reported an outage at these times, add a watched service with -Sites to collect application-level evidence.',
       icmpOnlyRows.map(r=>r.t));
   }
@@ -1321,7 +1323,8 @@ function monitorHtml(run){
     (a.gwUsable?`<p class="line">gateway ${esc(pv('ip',meta.gateway||''))}: reachable <b>${a.gwReachPct!=null?a.gwReachPct.toFixed(1)+'%':'--'}</b>${a.gwAvg!=null?` - avg <b>${a.gwAvg} ms</b>`:''} - drops-while-up <b>${a.gwDropWhileUp}</b></p>`
       :(meta.gateway?`<p class="line dim">gateway ${esc(pv('ip',meta.gateway))} never answered ping (blocks ICMP) - gateway-hop signal unavailable.</p>`:''))+
     (meta.activeRoute?`<p class="line dim">active IPv4 path: ${esc(meta.activeRoute.alias||'interface '+meta.activeRoute.ifIndex)} via ${esc(pv('ip',meta.activeRoute.nextHop||''))}${meta.activeRoute.metric!=null?` - metric ${meta.activeRoute.metric}`:''}</p>`:'')+
-    `<p class="line">DNS avg <b>${a.dnsAvg!=null?a.dnsAvg+' ms':'--'}</b> - DNS fails <b>${a.dnsFails}</b> - DNS servers <b>${esc((meta.dnsServers||[]).join(', ')||'unknown')}</b></p>`+
+    `<p class="line">DNS avg <b>${a.dnsAvg!=null?a.dnsAvg+' ms':'--'}</b> - DNS fails <b>${a.dnsFails}</b> - DNS servers <b>${esc((meta.dnsServers||[]).join(', ')||'unknown')}</b>${meta.dnsIsPublic===false?' <span style="color:var(--muted)">(on-LAN resolver - cannot prove internet reachability)</span>':''}</p>`+
+    (meta.dnsIsPublic!=null||(meta.httpTargets&&meta.httpTargets.length)?`<p class="line dim">outage confirmation: ping plus ${[meta.dnsIsPublic?'off-LAN DNS':null,(meta.httpTargets&&meta.httpTargets.length)?'watched sites':null].filter(Boolean).join(' / ')||'nothing else (ping failures counted as outages)'}</p>`:'')+
     a.httpSeries.map(h=>`<p class="line">${esc(h.host)}: reachable <b>${h.reachPct>=99.95?'100%':h.reachPct.toFixed(2)+'%'}</b>${h.avgMs!=null?` - avg <b>${h.avgMs} ms</b>`:''} - unreachable <b>${h.fails}</b>${h.slow?` - slow <b>${h.slow}</b>`:''}</p>`).join(''));
 
   html+=sec('DATA','filter and page through every sample',

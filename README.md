@@ -7,22 +7,13 @@ is opt-in.
 
 ## Use
 
-Download a versioned release rather than the mutable `main` branch, verify its
-checksum, then run it under your organisation's PowerShell policy:
+    irm https://raw.githubusercontent.com/SolusKossi/nwa/main/nwa.ps1 -OutFile nwa.ps1
+    powershell -ep bypass -f .\nwa.ps1
 
-    $version = 'v0.1.0'   # replace with the release you want
-    $base = "https://github.com/SolusKossi/nwa/releases/download/$version"
-    irm "$base/nwa.ps1" -OutFile nwa.ps1
-    irm "$base/SHA256SUMS.txt" -OutFile SHA256SUMS.txt
-    $expected = ((Get-Content SHA256SUMS.txt) -split '\s+')[0].ToLowerInvariant()
-    $actual = (Get-FileHash .\nwa.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $expected) { throw 'Checksum verification failed.' }
-    powershell -NoProfile -File .\nwa.ps1
+If your machine blocks the script ("running scripts is disabled", or it was
+downloaded with a browser rather than `irm`), unblock it first:
 
-For an additional free provenance check on this public repository, install the
-[GitHub CLI](https://cli.github.com/) and run:
-
-    gh attestation verify .\nwa.ps1 -R SolusKossi/nwa
+    Unblock-File .\nwa.ps1
 
 Options:
 
@@ -60,10 +51,26 @@ so hours where the laptop was asleep are not counted as "all fine".
 - Repo layout: src/nwa.src.ps1 + index.html are the sources; build.ps1 bakes
   index.html into nwa.ps1 as the report template. Edit src, run build, commit.
 
-## Releases and signing
+## Verify what you are running
 
-Pushing a `v*` tag runs the release workflow. It rebuilds the script, confirms
+For managed machines, or if you would rather not trust the mutable `main`
+branch, take a tagged release and check it before running:
+
+    $version = 'v0.1.0'   # or a later release
+    $base = "https://github.com/SolusKossi/nwa/releases/download/$version"
+    irm "$base/nwa.ps1" -OutFile nwa.ps1
+    irm "$base/SHA256SUMS.txt" -OutFile SHA256SUMS.txt
+    $expected = ((Get-Content SHA256SUMS.txt) -split '\s+')[0].ToLowerInvariant()
+    $actual = (Get-FileHash .\nwa.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { throw 'Checksum verification failed.' }
+
+With the [GitHub CLI](https://cli.github.com/) you can also check the build
+provenance attestation:
+
+    gh attestation verify .\nwa.ps1 -R SolusKossi/nwa
+
+Pushing a `v*` tag runs the release workflow: it rebuilds the script, confirms
 the committed distributable is current, publishes `nwa.ps1` with a SHA-256
-checksum, and creates a GitHub build-provenance attestation.
+checksum, and creates the attestation.
 
 MIT license.

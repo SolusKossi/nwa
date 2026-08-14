@@ -234,6 +234,27 @@ $dnsIdx = if ($activeRoute) { @($activeRoute.ifIndex) } else { $upIdx }
 $dnsServers = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
   Where-Object { $_.ServerAddresses -and ($dnsIdx -contains $_.InterfaceIndex) } |
   ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+
+# A DNS answer only proves the internet is reachable when the resolver is off-LAN.
+# On a domain-joined PC the resolver is usually an on-prem DC, which keeps answering
+# from the LAN during an internet outage - so it cannot be used as proof of uptime.
+function Test-OffLanAddress([string]$ip){
+  if (-not $ip) { return $false }
+  if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return $false }
+  $o = $ip.Split('.') | ForEach-Object { [int]$_ }
+  if ($o[0] -eq 10) { return $false }
+  if ($o[0] -eq 127) { return $false }
+  if ($o[0] -eq 172 -and $o[1] -ge 16 -and $o[1] -le 31) { return $false }
+  if ($o[0] -eq 192 -and $o[1] -eq 168) { return $false }
+  if ($o[0] -eq 169 -and $o[1] -eq 254) { return $false }
+  if ($o[0] -eq 100 -and $o[1] -ge 64 -and $o[1] -le 127) { return $false }   # CGNAT
+  return $true
+}
+# Conservative: every configured resolver must be off-LAN, because Windows may use any of them.
+$dnsIsPublic = ($dnsServers.Count -gt 0) -and -not (@($dnsServers | Where-Object { -not (Test-OffLanAddress $_) }).Count)
+if (-not $dnsIsPublic) {
+  Write-Host 'DNS resolver is on the local network - ICMP failures will be treated as real outages.' -ForegroundColor DarkYellow
+}
 if ($gateway) {
   $gwTest = Test-PingSet $gateway 2 800
   if ($gwTest.recv -eq 0) { Write-Host "Gateway $gateway doesn't answer ping (ICMP blocked) - skipping gateway checks." -ForegroundColor DarkYellow; $gateway = $null }
@@ -450,6 +471,7 @@ $meta = [ordered]@{
   activeRoute     = $activeRoute
   dnsHost         = $dnsHost
   dnsServers      = $dnsServers
+  dnsIsPublic     = $dnsIsPublic
   adapter         = $adapterInfo
   ipv6            = $ipv6
   bssidHidden     = $bssidHidden
@@ -735,11 +757,15 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
   # sites (@() keeps a single result an array through ConvertTo-Json)
   if ($httpTargets.Count) { $tick.http = @(Test-Sites $httpTargets) } else { $tick.http = @() }
 
-  # A full outage needs more evidence than ICMP alone: some networks block
-  # ping while DNS and normal traffic keep working. Keep ICMP-only failures
-  # visible, but do not charge them against uptime.
+  # A full outage needs more evidence than ICMP alone: some networks block ping
+  # while normal traffic keeps working. Only downgrade a ping failure when
+  # something else actually crossed the internet in the same tick - an off-LAN
+  # DNS answer, or a watched site responding. An on-prem resolver answering
+  # proves nothing (it is reachable over the LAN during an internet outage).
   $reach = @($targets | ForEach-Object { $tick[$_] } | Where-Object { $_ -ge 0 }).Count
-  $isDown = ($tick.up -eq $false) -or (($reach -eq 0) -and ($tick.dns -lt 0))
+  $dnsProof  = $dnsIsPublic -and ($tick.dns -ge 0)
+  $siteProof = [bool](@($tick.http | Where-Object { $_.ms -ge 0 }).Count)
+  $isDown = ($tick.up -eq $false) -or (($reach -eq 0) -and -not $dnsProof -and -not $siteProof)
   $icmpOnly = ($reach -eq 0) -and -not $isDown
   $tick.down = [bool]$isDown
   $tick.icmpOnly = [bool]$icmpOnly
