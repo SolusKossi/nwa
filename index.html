@@ -344,13 +344,15 @@ function addRunFromText(text, name){
     if(String(m.schema||'').indexOf('nwa-monitor')===0){ pushMonitor(name,m,obj.slice(1)); return; }
     RUNS.push({kind:'snapshot', name, data:m}); return;
   }
-  const objs=[];
-  text.split(/\r?\n/).forEach(ln=>{ ln=ln.trim(); if(!ln) return; try{ objs.push(JSON.parse(ln)); }catch(_){} });
-  if(objs.length && objs[0] && objs[0].schema==='nwa-monitor/1'){ pushMonitor(name,objs[0],objs.slice(1)); return; }
+  const objs=[]; let rejected=0;
+  text.split(/\r?\n/).forEach(ln=>{ ln=ln.trim(); if(!ln) return; try{ objs.push(JSON.parse(ln)); }catch(_){ rejected++; } });
+  if(objs.length && objs[0] && objs[0].schema==='nwa-monitor/1'){
+    pushMonitor(name,objs[0],objs.slice(1),{recordsRead:objs.length,rejected}); return;
+  }
   throw new Error(name+' does not look like an nwa log');
 }
-function pushMonitor(name,meta,ticks){
-  RUNS.push({kind:'monitor', name, meta, ticks, a:analyzeMonitor(meta,ticks), view:null});
+function pushMonitor(name,meta,ticks,ingest){
+  RUNS.push({kind:'monitor', name, meta, ticks, ingest:ingest||{recordsRead:ticks.length+1,rejected:0}, a:analyzeMonitor(meta,ticks), view:null});
 }
 function newScan(){
   RUNS=[]; FOCUS=null;
@@ -498,7 +500,10 @@ function analyzeMonitor(meta, ticks){
       jit  = reachedQ.length ? Math.min(...reachedQ.map(x=>(typeof x.jit==='number'?x.jit:0))) : null;
     }
     const gwms = (typeof tk.gw==='number') ? tk.gw : null;
-    return { t:tk.t, tms:+new Date(tk.t), best, down:(tk.up===false)||reach.length===0, dns, dnsFail:dns===-1,
+    const legacyDown=(tk.up===false)||reach.length===0;
+    const down=typeof tk.down==='boolean'?tk.down:legacyDown;
+    const icmpOnly=typeof tk.icmpOnly==='boolean'?tk.icmpOnly:false;
+    return { t:tk.t, tms:+new Date(tk.t), best, down, icmpOnly, dns, dnsFail:dns===-1,
              sig:(typeof tk.sig==='number'?tk.sig:null), httpFail, httpSlow,
              loss, jit, gw:gwms, gwReach:(gwms!=null && gwms>=0),
              bssid:tk.bssid||null, band:tk.band||null, chan:(typeof tk.chan==='number'?tk.chan:null),
@@ -568,7 +573,7 @@ function analyzeMonitor(meta, ticks){
   const spanSec=N?(t1-t0)/1000:0;
 
   // loss / jitter
-  const lossRows=rows.filter(r=>r.loss!=null && !r.down);
+  const lossRows=rows.filter(r=>r.loss!=null && !r.down && !r.icmpOnly);
   const lossTicks=lossRows.filter(r=>r.loss>0).length;
   const avgLoss=lossRows.length?(lossRows.reduce((a,b)=>a+b.loss,0)/lossRows.length):null;
   const maxLoss=lossRows.length?Math.max(...lossRows.map(r=>r.loss)):null;
@@ -696,6 +701,7 @@ function analyzeMonitor(meta, ticks){
   ].sort((x,y)=>x.tms-y.tms);
 
   /* findings - times is an array of ISO timestamps */
+  const icmpOnlyRows=rows.filter(r=>r.icmpOnly);
   const problems=[]; const P=(level,title,detail,fix,times)=>problems.push({level,title,detail,fix,times:times||[]});
   const tTimes = pred => rows.filter(pred).map(r=>r.t);
   if(outages.length){
@@ -707,6 +713,12 @@ function analyzeMonitor(meta, ticks){
       onWifi?'Check if drops line up with weak signal below. If so, move closer / use Ethernet. Otherwise reboot the router and, if it persists, report the times to your ISP.'
             :'Reboot the router/modem. If it keeps happening, give these timestamps to your ISP.',
       outages.map(o=>o.start));
+  }
+  if(icmpOnlyRows.length){
+    P('warn', `ICMP failed ${icmpOnlyRows.length}x, but the outage was not confirmed`,
+      'Both internet ping targets timed out while DNS still resolved. This can be an ICMP policy/filter rather than a real loss of internet access, so these moments are not counted as downtime.',
+      'If users reported an outage at these times, add a watched service with -Sites to collect application-level evidence.',
+      icmpOnlyRows.map(r=>r.t));
   }
   if(dnsFails){
     const da=dnsAdvice(meta.dnsServers);
@@ -853,7 +865,7 @@ function analyzeMonitor(meta, ticks){
 
   const a = {rows,outages,interval,targets,httpSeries,verdict,checks,problems,
     uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsAvg,minSig,maxSig,onWifi,startT,endT,t0,t1,spanSec,N,
-    hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,
+    hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,icmpOnlyN:icmpOnlyRows.length,
     gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamTimes,roamPairs,bandSwitches,aps,bands,on5,on24,minRate,lowRate,
     radio:(rows.find(r=>r.radio)||{}).radio,
     coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend,
@@ -866,7 +878,7 @@ function analyzeMonitor(meta, ticks){
 
 function tickStatus(r){
   if(r.down) return 'bad';
-  if(r.httpFail || r.dnsFail || (r.best!=null&&r.best>=120) || (r.sig!=null&&r.sig<40) || r.httpSlow
+  if(r.icmpOnly || r.httpFail || r.dnsFail || (r.best!=null&&r.best>=120) || (r.sig!=null&&r.sig<40) || r.httpSlow
      || (r.loss!=null&&r.loss>0) || (r.jit!=null&&r.jit>=30) || r.gwBad) return 'warn';
   return 'ok';
 }
@@ -1220,10 +1232,12 @@ function monitorHtml(run){
   const a=run.a, meta=run.meta;
   const host=pv('host',meta.computerName||'?');
   const color=RUNCOLORS[run.ci%4];
+  const label=meta.runLabel?` - ${esc(meta.runLabel)}`:'';
+  const rejected=run.ingest&&run.ingest.rejected||0;
   let html=`<section id="${run.id}" class="runblock">`;
   html+=`<div class="runhead" style="border-left-color:${color}">
     <span class="runchip"><b style="background:${color}"></b>${esc(host)}</span>
-    <span class="muted">${esc(run.name||'monitor log')} - ${esc(fmtDate(a.startT))} -> ${esc(fmtTime(a.endT))} - ${a.N} samples / ${a.interval}s</span>
+    <span class="muted">${esc(run.name||'monitor log')}${label} - ${esc(fmtDate(a.startT))} -> ${esc(fmtTime(a.endT))} - ${a.N} samples / ${a.interval}s${rejected?` - ${rejected} unreadable line${rejected===1?'':'s'}`:''}</span>
     ${vpill(a.verdict.level)}</div>`;
 
   if(!a.N){ return html+`<p class="empty">This log has no samples yet - let the monitor run a while, then re-upload.</p></section>`; }
@@ -1306,6 +1320,7 @@ function monitorHtml(run){
     (a.hasQ?`<p class="line">packet loss: <b>${a.lossTicks}</b> check(s) with loss - avg <b>${a.avgLoss!=null?a.avgLoss.toFixed(1):'0'}%</b> - peak <b>${a.maxLoss!=null?a.maxLoss:0}%</b> - jitter avg <b>${a.avgJit!=null?a.avgJit:'--'} ms</b> - peak <b>${a.maxJit!=null?a.maxJit:'--'} ms</b></p>`:'')+
     (a.gwUsable?`<p class="line">gateway ${esc(pv('ip',meta.gateway||''))}: reachable <b>${a.gwReachPct!=null?a.gwReachPct.toFixed(1)+'%':'--'}</b>${a.gwAvg!=null?` - avg <b>${a.gwAvg} ms</b>`:''} - drops-while-up <b>${a.gwDropWhileUp}</b></p>`
       :(meta.gateway?`<p class="line dim">gateway ${esc(pv('ip',meta.gateway))} never answered ping (blocks ICMP) - gateway-hop signal unavailable.</p>`:''))+
+    (meta.activeRoute?`<p class="line dim">active IPv4 path: ${esc(meta.activeRoute.alias||'interface '+meta.activeRoute.ifIndex)} via ${esc(pv('ip',meta.activeRoute.nextHop||''))}${meta.activeRoute.metric!=null?` - metric ${meta.activeRoute.metric}`:''}</p>`:'')+
     `<p class="line">DNS avg <b>${a.dnsAvg!=null?a.dnsAvg+' ms':'--'}</b> - DNS fails <b>${a.dnsFails}</b> - DNS servers <b>${esc((meta.dnsServers||[]).join(', ')||'unknown')}</b></p>`+
     a.httpSeries.map(h=>`<p class="line">${esc(h.host)}: reachable <b>${h.reachPct>=99.95?'100%':h.reachPct.toFixed(2)+'%'}</b>${h.avgMs!=null?` - avg <b>${h.avgMs} ms</b>`:''} - unreachable <b>${h.fails}</b>${h.slow?` - slow <b>${h.slow}</b>`:''}</p>`).join(''));
 
@@ -1402,6 +1417,12 @@ function focusFinding(id,idx){
 
 /* ---------- compare ---------- */
 function compareHtml(mons){
+  const sameInterval=mons.every(m=>m.a.interval===mons[0].a.interval);
+  const targetKey=m=>[...(m.meta.targets||[])].sort().join('|');
+  const sameTargets=mons.every(m=>targetKey(m)===targetKey(mons[0]));
+  const compareNote=(sameInterval&&sameTargets)
+    ? 'same collection profile - green = better'
+    : 'different interval or ping targets - compare directionally only';
   const met=(label,fn,better)=>({label,vals:mons.map(m=>fn(m.a)),better});
   const ms=[
     met('Uptime',a=>a.uptimePct,'hi'),
@@ -1430,8 +1451,8 @@ function compareHtml(mons){
     return `<tr><td>${esc(m.label)}</td>${m.vals.map((v,i)=>
       `<td class="${win<0?'':(i===win?'win':'lose')}">${esc(fmtv(m,v))}</td>`).join('')}</tr>`;
   }).join('');
-  const heads=mons.map(m=>`<th><span class="runchip"><b style="background:${RUNCOLORS[m.ci%4]}"></b>${esc(pv('host',m.meta.computerName||m.name))}</span></th>`).join('');
-  let html=sec('COMPARE','side by side - green = better',
+  const heads=mons.map(m=>`<th><span class="runchip"><b style="background:${RUNCOLORS[m.ci%4]}"></b>${esc(pv('host',m.meta.computerName||m.name))}${m.meta.runLabel?` - ${esc(m.meta.runLabel)}`:''}</span></th>`).join('');
+  let html=sec('COMPARE',compareNote,
     `<div class="scroll delta"><table><thead><tr><th>Metric</th>${heads}</tr></thead><tbody>${rows}</tbody></table></div>`,'cmp');
 
   // overlay charts when the runs overlap in time
@@ -1460,7 +1481,7 @@ function snapshotHtml(run){
   let html=`<section id="${run.id}" class="runblock">`;
   html+=`<div class="runhead" style="border-left-color:${RUNCOLORS[run.ci%4]}">
     <span class="runchip"><b style="background:${RUNCOLORS[run.ci%4]}"></b>${esc(pv('host',sys.computerName||'?'))}</span>
-    <span class="muted">snapshot - ${esc(fmtDate(d.generatedAt))}</span>${vpill(dg.verdict.level)}</div>`;
+    <span class="muted">snapshot${d.runLabel?` - ${esc(d.runLabel)}`:''} - ${esc(fmtDate(d.generatedAt))}</span>${vpill(dg.verdict.level)}</div>`;
   html+=`<div class="verdict v-${dg.verdict.level}"><div class="ic">${dg.verdict.ic}</div>
     <div><div class="big">${dg.verdict.big}</div>
     <div class="small">${dg.problems.length? dg.problems.length+' thing'+(dg.problems.length>1?'s':'')+' to look at' : 'all checks passed - nothing to fix'}</div></div></div>`;
@@ -1499,8 +1520,9 @@ function snapshotHtml(run){
   }
   const totRx=(d.adapterStats||[]).reduce((s,b)=>s+(b.receivedBytes||0),0);
   const totTx=(d.adapterStats||[]).reduce((s,b)=>s+(b.sentBytes||0),0);
+  const publicIp=d.publicIpCollected ? (d.publicIp||'unavailable') : 'not collected';
   raw+=sec('TRAFFIC SINCE BOOT','counters',
-    `<p class="line">downloaded <b>${bytes(totRx)}</b> - uploaded <b>${bytes(totTx)}</b> - uptime <b>${num(sys.uptimeHours,1)} h</b> - public IP <b>${esc(pv('ip',d.publicIp||'--'))}</b></p>`);
+    `<p class="line">downloaded <b>${bytes(totRx)}</b> - uploaded <b>${bytes(totTx)}</b> - uptime <b>${num(sys.uptimeHours,1)} h</b> - public IP <b>${esc(pv('ip',publicIp))}</b></p>`);
   const talk={};
   (d.connections||[]).forEach(c=>{ const k=(c.process||'?')+' -> '+c.remoteAddress;
     talk[k]=talk[k]||{process:c.process,remote:c.remoteAddress,port:c.remotePort,n:0}; talk[k].n++; });

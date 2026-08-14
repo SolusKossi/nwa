@@ -12,3 +12,4 @@ network-report*.json
 Thumbs.db
 test-report.html
 network-report*.html
+dist/

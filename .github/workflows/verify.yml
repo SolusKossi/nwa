@@ -1,0 +1,34 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify source, report, and distributable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./src/nwa.src.ps1), [ref]$null, [ref]$errors)
+          if ($errors.Count) { throw ($errors | Out-String) }
+
+          node -e "const s=require('fs').readFileSync('index.html','utf8'); const a=s.lastIndexOf('<script>'),b=s.lastIndexOf('</script>'); new Function(s.slice(a+8,b));"
+          if ($LASTEXITCODE) { throw 'Report JavaScript does not parse.' }
+
+          ./build.ps1 -OutputPath ./dist/nwa.ps1
+          if ((Get-FileHash ./dist/nwa.ps1).Hash -ne (Get-FileHash ./nwa.ps1).Hash) {
+            throw 'nwa.ps1 is stale. Run ./build.ps1 and commit the result.'
+          }

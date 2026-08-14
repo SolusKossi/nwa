@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Least privilege, with only the permissions needed to publish a release and
+# issue GitHub's Sigstore-backed build provenance attestation.
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+
+      - name: Build and verify the distributable
+        shell: pwsh
+        run: |
+          ./build.ps1 -OutputPath ./dist/nwa.ps1
+          if ((Get-FileHash ./dist/nwa.ps1).Hash -ne (Get-FileHash ./nwa.ps1).Hash) {
+            throw 'The committed distributable is stale. Run ./build.ps1 and commit nwa.ps1 before tagging a release.'
+          }
+
+      - name: Create SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -LiteralPath ./dist/nwa.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *nwa.ps1" | Set-Content -LiteralPath ./SHA256SUMS.txt -NoNewline -Encoding ascii
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/nwa.ps1
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" ./dist/nwa.ps1 ./SHA256SUMS.txt --generate-notes --title "nwa ${{ github.ref_name }}"

@@ -1,5 +1,10 @@
 # Builds nwa.ps1 (the distributable) from src/nwa.src.ps1 + index.html.
 # index.html is embedded base64 as the report template.
+[CmdletBinding()]
+param(
+  [string]$OutputPath = ''
+)
+
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -13,9 +18,17 @@ $src = [IO.File]::ReadAllText((Join-Path $root 'src\nwa.src.ps1'))
 if ($src -notmatch '@@NWA_TEMPLATE_B64@@') { throw 'src/nwa.src.ps1 is missing the @@NWA_TEMPLATE_B64@@ placeholder.' }
 
 $out = $src.Replace('@@NWA_TEMPLATE_B64@@', $b64)
-[IO.File]::WriteAllText((Join-Path $root 'nwa.ps1'), $out, (New-Object Text.UTF8Encoding($false)))
+if ($OutputPath) {
+  $outPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+  $outDir = Split-Path -Parent $outPath
+  if ($outDir) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
+} else {
+  $outPath = Join-Path $root 'nwa.ps1'
+}
+[IO.File]::WriteAllText($outPath, $out, (New-Object Text.UTF8Encoding($false)))
 
 $e = $null
-[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'nwa.ps1'), [ref]$null, [ref]$e)
+[void][System.Management.Automation.Language.Parser]::ParseFile($outPath, [ref]$null, [ref]$e)
 if ($e.Count) { $e | ForEach-Object { Write-Host "$($_.Extent.StartLineNumber): $($_.Message)" -ForegroundColor Red }; throw 'nwa.ps1 does not parse.' }
-Write-Host ("Built nwa.ps1 ({0} KB) - parse OK." -f [math]::Round((Get-Item (Join-Path $root 'nwa.ps1')).Length / 1kb))
+
+Write-Host ("Built nwa.ps1 ({0} KB) - parse OK." -f [math]::Round((Get-Item $outPath).Length / 1kb))

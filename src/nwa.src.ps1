@@ -23,11 +23,14 @@ param(
   [int]$PingCount = 5,               # pings per target per check (loss / jitter)
   [int]$NeighborScanSec = 300,       # how often to scan nearby APs (0 = never)
   [string]$OutDir = '',              # where files go (default: Desktop)
-  [switch]$Report                    # always generate the report at the end (no prompt)
+  [switch]$Report,                   # always generate the report at the end (no prompt)
+  [string]$RunLabel = '',            # e.g. baseline, post-AP-change, validation
+  [switch]$IncludePublicIp            # snapshot only; makes a request to api.ipify.org
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference    = 'SilentlyContinue'
+$script:ToolVersion    = '0.1.0'
 
 # make sure the Windows networking modules (NetAdapter, DnsClient) are findable
 $winMods = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules'
@@ -48,6 +51,9 @@ else {
   $ReportDir = [Environment]::GetFolderPath('Desktop')
 }
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+# Every capture gets its own stable ID. This preserves evidence for before/after
+# comparisons instead of overwriting the previous monitor log and report.
+$script:runId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + '-' + ([guid]::NewGuid().ToString('N').Substring(0,6))
 # every line written to the log is also kept in memory; the report is built from
 # memory so a sync engine mangling the log file cannot produce an empty report
 $script:logLines = New-Object System.Collections.Generic.List[string]
@@ -181,7 +187,7 @@ function Test-Sites([string[]]$urls){
 }
 
 # build network-report.html from the in-memory data lines (never re-reads the log file)
-function New-NwaReport([string[]]$jsonLines,[bool]$OpenIt){
+function New-NwaReport([string[]]$jsonLines,[bool]$OpenIt,[string]$runId){
   if ($NWA_B64 -like '@@*') { Write-Host 'No report template embedded (source build) - run build.ps1 first.' -ForegroundColor DarkYellow; return $null }
   if (-not $jsonLines -or $jsonLines.Count -eq 0) { Write-Host 'No data captured - report skipped.' -ForegroundColor DarkYellow; return $null }
   try {
@@ -189,7 +195,7 @@ function New-NwaReport([string[]]$jsonLines,[bool]$OpenIt){
     $arr = '[' + ($jsonLines -join ',') + ']'
     $arr = $arr.Replace('</','<\/')   # keep '</script>' inside logged strings from breaking the page
     $html = $tpl.Replace('window.NWA_EMBEDDED = window.NWA_EMBEDDED || null;', 'window.NWA_EMBEDDED = ' + $arr + ';')
-    $rp = Join-Path $ReportDir 'network-report.html'
+    $rp = Join-Path $ReportDir ('network-report-' + $runId + '.html')
     Set-Content -Path $rp -Value $html -Encoding utf8
     Write-Host ('Report: ' + $rp) -ForegroundColor Green
     if ($OpenIt) { Start-Process $rp }
@@ -199,13 +205,35 @@ function New-NwaReport([string[]]$jsonLines,[bool]$OpenIt){
 
 # ---------- environment context (collected once) ----------
 
-$upIdx = @((Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }).ifIndex)
-$dnsServers = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-  Where-Object { $_.ServerAddresses -and ($upIdx -contains $_.InterfaceIndex) } |
-  ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
-
+$activeRoute = $null
 $gateway = $null
-try { $gateway = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1).IPv4DefaultGateway.NextHop } catch {}
+try {
+  # Prefer the actual lowest-metric IPv4 default route over an arbitrary
+  # "first" adapter. This matters when Wi-Fi, Ethernet, and a VPN coexist.
+  $r = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+    Where-Object { $_.NextHop -and $_.NextHop -ne '0.0.0.0' } |
+    Sort-Object @{ Expression = { [int]$_.RouteMetric + [int]$_.InterfaceMetric } }, RouteMetric |
+    Select-Object -First 1
+  if ($r) {
+    $gateway = [string]$r.NextHop
+    $routeAdapter = Get-NetAdapter -InterfaceIndex $r.InterfaceIndex -ErrorAction SilentlyContinue
+    $activeRoute = [ordered]@{
+      ifIndex = [int]$r.InterfaceIndex
+      alias = if ($routeAdapter) { [string]$routeAdapter.Name } else { $null }
+      nextHop = $gateway
+      metric = [int]$r.RouteMetric + [int]$r.InterfaceMetric
+    }
+  }
+} catch {}
+if (-not $gateway) {
+  try { $gateway = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1).IPv4DefaultGateway.NextHop } catch {}
+}
+
+$upIdx = @((Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }).ifIndex)
+$dnsIdx = if ($activeRoute) { @($activeRoute.ifIndex) } else { $upIdx }
+$dnsServers = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+  Where-Object { $_.ServerAddresses -and ($dnsIdx -contains $_.InterfaceIndex) } |
+  ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
 if ($gateway) {
   $gwTest = Test-PingSet $gateway 2 800
   if ($gwTest.recv -eq 0) { Write-Host "Gateway $gateway doesn't answer ping (ICMP blocked) - skipping gateway checks." -ForegroundColor DarkYellow; $gateway = $null }
@@ -215,7 +243,8 @@ if ($gateway) {
 $adapterInfo = $null
 try {
   $a = Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' } |
-       Sort-Object { if ($_.PhysicalMediaType -match '802.11|Wireless') { 0 } else { 1 } } | Select-Object -First 1
+       Sort-Object { if ($activeRoute -and $_.ifIndex -eq $activeRoute.ifIndex) { 0 } elseif ($_.PhysicalMediaType -match '802.11|Wireless') { 1 } else { 2 } } |
+       Select-Object -First 1
   if ($a) {
     $pm = $null
     try { $p = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction Stop
@@ -248,6 +277,9 @@ if ($w0.sig -ne $null -and -not $w0.bssid) {
 if ($Snapshot) {
   $snapData = [ordered]@{}
   $snapData.schema      = 'nwa-report/1'
+  $snapData.toolVersion = $script:ToolVersion
+  $snapData.runId       = $script:runId
+  $snapData.runLabel    = $RunLabel
   $snapData.generatedAt = (Get-Date).ToString('o')
   $snapData.hoursWindow = 24
 
@@ -366,9 +398,12 @@ if ($Snapshot) {
     [ordered]@{ ifAlias = $_.InterfaceAlias; nextHop = $_.NextHop; metric = $_.RouteMetric }
   })
 
-  Write-Host 'Looking up public IP (best effort)...'
-  try   { $snapData.publicIp = (Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -TimeoutSec 5).ip }
-  catch { $snapData.publicIp = $null }
+  $snapData.publicIpCollected = [bool]$IncludePublicIp
+  if ($IncludePublicIp) {
+    Write-Host 'Looking up public IP (best effort)...'
+    try   { $snapData.publicIp = (Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -TimeoutSec 5).ip }
+    catch { $snapData.publicIp = $null }
+  } else { $snapData.publicIp = $null }
 
   Write-Host 'Collecting recent network events (last 24h)...'
   $since = (Get-Date).AddHours(-24)
@@ -384,23 +419,26 @@ if ($Snapshot) {
       }
     })
 
-  $outPath = Join-Path $LogDir 'network-report.json'
+  $outPath = Join-Path $LogDir ('network-report-' + $script:runId + '.json')
   $snapData | ConvertTo-Json -Depth 8 | Out-File -FilePath $outPath -Encoding utf8
   Write-Host ('Data: ' + $outPath) -ForegroundColor Green
   $interactive = $true
   try { $interactive = ($Host.Name -eq 'ConsoleHost') -and -not [Console]::IsInputRedirected } catch { $interactive = $false }
   $compact = $snapData | ConvertTo-Json -Compress -Depth 8
-  New-NwaReport @($compact) ($interactive -or $Report) | Out-Null
+  New-NwaReport @($compact) ($interactive -or $Report) $script:runId | Out-Null
   return
 }
 
 # ============================================================
 #  MONITOR MODE
 # ============================================================
-$out = Join-Path $LogDir 'network-monitor.jsonl'
+$out = Join-Path $LogDir ('network-monitor-' + $script:runId + '.jsonl')
 
 $meta = [ordered]@{
   schema          = 'nwa-monitor/1'
+  toolVersion     = $script:ToolVersion
+  runId           = $script:runId
+  runLabel        = $RunLabel
   startedAt       = (Get-Date).ToString('o')
   intervalSec     = $IntervalSec
   durationHours   = $DurationHours
@@ -409,6 +447,7 @@ $meta = [ordered]@{
   computerName    = $env:COMPUTERNAME
   targets         = $targets
   gateway         = $gateway
+  activeRoute     = $activeRoute
   dnsHost         = $dnsHost
   dnsServers      = $dnsServers
   adapter         = $adapterInfo
@@ -696,14 +735,22 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
   # sites (@() keeps a single result an array through ConvertTo-Json)
   if ($httpTargets.Count) { $tick.http = @(Test-Sites $httpTargets) } else { $tick.http = @() }
 
-  # down detection + trace on transition (rate-limited)
+  # A full outage needs more evidence than ICMP alone: some networks block
+  # ping while DNS and normal traffic keep working. Keep ICMP-only failures
+  # visible, but do not charge them against uptime.
   $reach = @($targets | ForEach-Object { $tick[$_] } | Where-Object { $_ -ge 0 }).Count
-  $isDown = ($tick.up -eq $false) -or ($reach -eq 0)
+  $isDown = ($tick.up -eq $false) -or (($reach -eq 0) -and ($tick.dns -lt 0))
+  $icmpOnly = ($reach -eq 0) -and -not $isDown
+  $tick.down = [bool]$isDown
+  $tick.icmpOnly = [bool]$icmpOnly
   if ($isDown -and -not $stWasDown -and ((Get-Date) - $stLastTrace).TotalSeconds -gt 300) {
     $tick.trace = @(Invoke-QuickTrace '1.1.1.1' 6)
     $stLastTrace = Get-Date
   }
 
+  $tickEnd = Get-Date
+  $tick.tEnd = $tickEnd.ToString('o')
+  $tick.elapsedMs = [int][math]::Round(($tickEnd - $tickStart).TotalMilliseconds)
   $tickJson = $tick | ConvertTo-Json -Compress -Depth 6
   $script:logLines.Add($tickJson)
   Add-Content -Path $out -Value $tickJson -Encoding utf8
@@ -717,7 +764,7 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
     $stDownSec += $IntervalSec
   } elseif ($stWasDown) { Add-Ev ($tickStart.ToString('HH:mm:ss') + ' back up') }
   $stWasDown = $isDown
-  if (-not $isDown -and $loss -gt 0) { $stLoss++ }
+  if (-not $isDown -and -not $icmpOnly -and $loss -gt 0) { $stLoss++ }
   if (-not $isDown -and $jit -ge 30) { $stJit++ }
   if ($tick.dns -lt 0) { $stDnsFail++; if (-not $isDown) { Add-Ev ($tickStart.ToString('HH:mm:ss') + ' DNS failed') } }
   if ($w.bssid) {
@@ -727,7 +774,7 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
   }
   foreach ($e in $wev) { if ($e.id -eq 8003) { Add-Ev (([datetime]$e.t).ToString('HH:mm:ss') + ' ' + $e.msg) } }
 
-  $state = if ($isDown) { 'DOWN' } elseif ($tick.dns -lt 0) { 'DNS!' } elseif ($loss -gt 0) { 'LOSS' } elseif ($jit -ge 30) { 'JIT' } else { 'ok' }
+  $state = if ($isDown) { 'DOWN' } elseif ($icmpOnly) { 'ICMP?' } elseif ($tick.dns -lt 0) { 'DNS!' } elseif ($loss -gt 0) { 'LOSS' } elseif ($jit -ge 30) { 'JIT' } else { 'ok' }
   $c = '.'; if ($state -eq 'DOWN') { $c = 'x' } elseif ($state -ne 'ok') { $c = '!' }
   $stHist += $c; if ($stHist.Length -gt 400) { $stHist = $stHist.Substring($stHist.Length - 400) }
 
@@ -790,4 +837,4 @@ if ($interactive -and -not $Report) {
   $ans = Read-Host 'Generate HTML report and open it? [Y/n]'
   if ($ans -eq '' -or $ans -match '^[yYjJ]') { $doReport = $true }
 }
-if ($doReport) { New-NwaReport @($script:logLines) $interactive | Out-Null }
+if ($doReport) { New-NwaReport @($script:logLines) $interactive $script:runId | Out-Null }

@@ -2,12 +2,27 @@
 
 Network diagnostics for Windows. One script: run it, watch the live status in
 the terminal, press Q - it builds and opens an HTML report that explains, in
-plain language, what is wrong. Everything is analyzed locally; nothing is uploaded.
+plain language, what is wrong. Analysis stays local; snapshot public-IP lookup
+is opt-in.
 
 ## Use
 
-    irm https://raw.githubusercontent.com/SolusKossi/nwa/main/nwa.ps1 -OutFile nwa.ps1
-    powershell -ep bypass -f .\nwa.ps1
+Download a versioned release rather than the mutable `main` branch, verify its
+checksum, then run it under your organisation's PowerShell policy:
+
+    $version = 'v0.1.0'   # replace with the release you want
+    $base = "https://github.com/SolusKossi/nwa/releases/download/$version"
+    irm "$base/nwa.ps1" -OutFile nwa.ps1
+    irm "$base/SHA256SUMS.txt" -OutFile SHA256SUMS.txt
+    $expected = ((Get-Content SHA256SUMS.txt) -split '\s+')[0].ToLowerInvariant()
+    $actual = (Get-FileHash .\nwa.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { throw 'Checksum verification failed.' }
+    powershell -NoProfile -File .\nwa.ps1
+
+For an additional free provenance check on this public repository, install the
+[GitHub CLI](https://cli.github.com/) and run:
+
+    gh attestation verify .\nwa.ps1 -R SolusKossi/nwa
 
 Options:
 
@@ -16,12 +31,15 @@ Options:
     -IntervalSec 10      seconds between checks
     -DurationHours 8     auto-stop (default: run until Q)
     -Report              generate the report without asking (scripted runs)
+    -RunLabel "baseline" label a run for before/after comparison
+    -IncludePublicIp     snapshot only; request the public IP from ipify.org
 
-The report opens from the Desktop. The raw log (network-monitor.jsonl) is
-written continuously to %LOCALAPPDATA%\nwa - deliberately outside
-OneDrive-synced folders, which lock and fork rapidly-changing files. You can
-also drop logs onto index.html to analyze them in any browser (drop two to
-compare machines side by side) - try it with sample-monitor.jsonl.
+The report opens from the Desktop. Each run gets its own timestamped raw log
+and report, written to %LOCALAPPDATA%\nwa and the Desktop respectively. This
+preserves evidence for before/after comparison and avoids OneDrive locking
+rapidly changing logs. You can also drop logs onto index.html to analyze them
+in any browser (drop two to compare machines side by side) - try it with
+sample-monitor.jsonl.
 
 ## What it measures
 
@@ -41,5 +59,11 @@ so hours where the laptop was asleep are not counted as "all fine".
   roam detection and the neighbor scan are limited. The script warns about it.
 - Repo layout: src/nwa.src.ps1 + index.html are the sources; build.ps1 bakes
   index.html into nwa.ps1 as the report template. Edit src, run build, commit.
+
+## Releases and signing
+
+Pushing a `v*` tag runs the release workflow. It rebuilds the script, confirms
+the committed distributable is current, publishes `nwa.ps1` with a SHA-256
+checksum, and creates a GitHub build-provenance attestation.
 
 MIT license.
