@@ -21,16 +21,15 @@ Options:
     -Sites "a.com,b.no"  also test reachability to your own sites
     -IntervalSec 10      seconds between checks
     -DurationHours 8     auto-stop (default: run until Q)
-    -Report              generate the report without asking (scripted runs)
+    -OfficeHours "08-17" when the office is busy (report coverage check)
     -RunLabel "baseline" label a run for before/after comparison
     -IncludePublicIp     snapshot only; request the public IP from ipify.org
 
-The report opens from the Desktop. Each run gets its own timestamped raw log
-and report, written to %LOCALAPPDATA%\nwa and the Desktop respectively. This
-preserves evidence for before/after comparison and avoids OneDrive locking
-rapidly changing logs. You can also drop logs onto index.html to analyze them
-in any browser (drop two to compare machines side by side) - try it with
-sample-monitor.jsonl.
+The report opens by itself when the run ends. Each run gets its own timestamped
+log and report in %LOCALAPPDATA%\nwa, so nothing clutters your desktop and each
+capture is preserved for before/after comparison. You can also drop logs onto
+index.html to analyze them in any browser (drop two to compare machines side by
+side) - try it with sample-monitor.jsonl.
 
 ## What it measures
 

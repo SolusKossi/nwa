@@ -22,10 +22,10 @@ param(
   [double]$DurationHours = 0,        # 0 = run until Q / Ctrl+C
   [int]$PingCount = 5,               # pings per target per check (loss / jitter)
   [int]$NeighborScanSec = 300,       # how often to scan nearby APs (0 = never)
-  [string]$OutDir = '',              # where files go (default: Desktop)
-  [switch]$Report,                   # always generate the report at the end (no prompt)
+  [string]$OutDir = '',              # where files go (default: %LOCALAPPDATA%\nwa)
   [string]$RunLabel = '',            # e.g. baseline, post-AP-change, validation
-  [switch]$IncludePublicIp            # snapshot only; makes a request to api.ipify.org
+  [string]$OfficeHours = '08-17',    # when the place is busy, for the report's coverage check
+  [switch]$IncludePublicIp           # snapshot only; makes a request to api.ipify.org
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -41,16 +41,18 @@ $script:hasResolve = [bool](Get-Command Resolve-DnsName -ErrorAction SilentlyCon
 # It is only ever written to an .html file - never executed as code.
 $NWA_B64 = '@@NWA_TEMPLATE_B64@@'
 
-# Where files go. The LOG is appended every few seconds, so it must NOT live in a
-# OneDrive/Dropbox-synced folder (sync engines lock and fork rapidly-changing files
-# - that is exactly what produced empty reports from a synced Desktop). The report
-# is a single write at the end, so the Desktop is fine for it.
-if ($OutDir) { $LogDir = $OutDir; $ReportDir = $OutDir }
-else {
-  $LogDir = Join-Path $env:LOCALAPPDATA 'nwa'
-  $ReportDir = [Environment]::GetFolderPath('Desktop')
-}
+# Everything lands in one out-of-the-way folder and the report opens by itself,
+# so nothing clutters the desktop. The log is appended every few seconds, so this
+# folder must not be inside OneDrive or Dropbox.
+if ($OutDir) { $LogDir = $OutDir } else { $LogDir = Join-Path $env:LOCALAPPDATA 'nwa' }
+$ReportDir = $LogDir
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+# Office hours ("08-17") travel with the log so the report can judge whether a run
+# actually covered a busy office.
+$officeStart = 8; $officeEnd = 17
+if ($OfficeHours -match '^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$') { $officeStart = [int]$matches[1]; $officeEnd = [int]$matches[2] }
+else { Write-Host "Could not read -OfficeHours '$OfficeHours' - using 08-17." -ForegroundColor DarkYellow }
 # Every capture gets its own stable ID. This preserves evidence for before/after
 # comparisons instead of overwriting the previous monitor log and report.
 $script:runId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + '-' + ([guid]::NewGuid().ToString('N').Substring(0,6))
@@ -301,6 +303,7 @@ if ($Snapshot) {
   $snapData.toolVersion = $script:ToolVersion
   $snapData.runId       = $script:runId
   $snapData.runLabel    = $RunLabel
+  $snapData.officeHours = ($officeStart.ToString("00") + "-" + $officeEnd.ToString("00"))
   $snapData.generatedAt = (Get-Date).ToString('o')
   $snapData.hoursWindow = 24
 
@@ -446,7 +449,7 @@ if ($Snapshot) {
   $interactive = $true
   try { $interactive = ($Host.Name -eq 'ConsoleHost') -and -not [Console]::IsInputRedirected } catch { $interactive = $false }
   $compact = $snapData | ConvertTo-Json -Compress -Depth 8
-  New-NwaReport @($compact) ($interactive -or $Report) $script:runId | Out-Null
+  New-NwaReport @($compact) $interactive $script:runId | Out-Null
   return
 }
 
@@ -460,6 +463,7 @@ $meta = [ordered]@{
   toolVersion     = $script:ToolVersion
   runId           = $script:runId
   runLabel        = $RunLabel
+  officeHours     = ($officeStart.ToString("00") + "-" + $officeEnd.ToString("00"))
   startedAt       = (Get-Date).ToString('o')
   intervalSec     = $IntervalSec
   durationHours   = $DurationHours
@@ -858,9 +862,4 @@ Write-Host ''
 Write-Host ('Stopped. ' + $k + ' samples over ' + (Format-Elapsed ((Get-Date) - $startT)) + '.') -ForegroundColor Green
 Write-Host ('Log: ' + $out) -ForegroundColor Green
 
-$doReport = [bool]$Report
-if ($interactive -and -not $Report) {
-  $ans = Read-Host 'Generate HTML report and open it? [Y/n]'
-  if ($ans -eq '' -or $ans -match '^[yYjJ]') { $doReport = $true }
-}
-if ($doReport) { New-NwaReport @($script:logLines) $interactive $script:runId | Out-Null }
+New-NwaReport @($script:logLines) $interactive $script:runId | Out-Null
