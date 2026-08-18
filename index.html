@@ -513,15 +513,21 @@ function analyzeMonitor(meta, ticks){
   const N=rows.length;
   const hasQ = rows.some(r=>r.loss!=null);
 
-  // sleep / power-off gaps
+  // sleep / power-off gaps, plus how much of the run covered a working office.
+  // An empty office hides load-dependent faults, so a clean weekend run must not
+  // read as an all-clear.
+  const isOffice = t => { const d=new Date(t); const dw=d.getDay(); return dw>=1 && dw<=5 && d.getHours()>=8 && d.getHours()<17; };
   const GAPF = 3;
-  let activeSec = N ? interval : 0, noDataSec = 0;
+  let activeSec = N ? interval : 0, noDataSec = 0, officeSec = (N && isOffice(rows[0].tms)) ? interval : 0;
   const gapList = [];
   for(let i=1;i<N;i++){
     const dt = (rows[i].tms - rows[i-1].tms) / 1000;
     if(dt > Math.max(GAPF*interval, 60)){ rows[i].gapBefore = dt; noDataSec += dt; gapList.push({t:rows[i-1].t, tms:rows[i-1].tms, dur:dt}); }
-    else if(dt > 0) activeSec += dt;
+    else if(dt > 0){ activeSec += dt; if(isOffice(rows[i].tms)) officeSec += dt; }
   }
+  const officePct = activeSec>0 ? 100*officeSec/activeSec : 0;
+  // Trusting a clean result needs at least about one working day of busy-office time.
+  const thinOffice = activeSec>=8*3600 && officeSec < 6*3600;
 
   // per-service reachability
   const httpSeries = httpTargets.map(u=>{
@@ -860,6 +866,7 @@ function analyzeMonitor(meta, ticks){
     {label:'DNS fails', status:dnsFails?(dnsFails>=3?'bad':'warn'):'ok', value:String(dnsFails)});
   if(onWifi) checks.push({label:'Min Wi-Fi', status:minSig<40?(minSig<25?'bad':'warn'):'ok', value:minSig+'%'});
   if(roams) checks.push({label:'Roams', status:findLvl('Roamed')||'warn', value:String(roams)});
+  if(activeSec>=8*3600) checks.push({label:'Office hours', status:thinOffice?'warn':'ok', value:Math.round(officePct)+'%'});
   if(wlanDiscs.length) checks.push({label:'Disconnects', status:findLvl('Wi-Fi disconnect')||'warn', value:String(wlanDiscs.length)});
   if(ethRows.length) checks.push({label:'Wired link', status:ethDowngraded?(ethMin<=100?'bad':'warn'):'ok', value:(ethMin!=null?(ethDowngraded?ethMin+' Mbps!':ethMax+' Mbps'):'--')});
   if(coChanOthers!=null) checks.push({label:'Ch. neighbours', status:coChanOthers>=6?'bad':coChanOthers>=3?'warn':'ok', value:String(coChanOthers)});
@@ -871,7 +878,7 @@ function analyzeMonitor(meta, ticks){
     gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamTimes,roamPairs,bandSwitches,aps,bands,on5,on24,minRate,lowRate,
     radio:(rows.find(r=>r.radio)||{}).radio,
     coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend,
-    activeSec,noDataSec,activeDays,gapList,wlanDiscs,topReasons,ethRows,ethShifts,ethMax,ethMin,ethDowngraded,
+    activeSec,noDataSec,activeDays,officeSec,officePct,thinOffice,gapList,wlanDiscs,topReasons,ethRows,ethShifts,ethMax,ethMin,ethDowngraded,
     bandStats,apStats,roamCorrPct,roamHitPct,hourGrid,dayList,chartEvents,
     bssidHidden:!!meta.bssidHidden};
   a.narrative = buildNarrative(a, meta);
@@ -888,6 +895,11 @@ function tickStatus(r){
 /* ---------- narrative + actions ---------- */
 function buildNarrative(a, meta){
   const s=[];
+  // Load-dependent faults only show up when the place is busy. Say so up front,
+  // so a quiet-hours run is never mistaken for proof that a problem is fixed.
+  if(a.thinOffice){
+    s.push(`Caution: only ${Math.round(a.officePct)}% of this run (${fmtDur(a.officeSec)}) fell inside working hours - the rest was evenings or the weekend. Problems that only appear when the office is busy would not show up here, so re-run across full working days before concluding anything.`);
+  }
   if(a.verdict.level==='ok'){
     s.push('The connection held steady for the whole monitored period: no outages that matter, stable latency, healthy DNS.');
   } else {
@@ -1195,9 +1207,11 @@ function heatmapHtml(a){
       if(c){
         const tot=c.ok+c.warn+c.bad;
         const wf=tot?(c.warn+c.bad)/tot:0;
+        // Count as well as proportion: intermittent faults are rare per hour
+        // (a few bad samples out of ~360) and would otherwise read as healthy.
         if(c.bad>0) cls='hm-bad';
-        else if(wf>0.25) cls='hm-w2';
-        else if(wf>0.05) cls='hm-w1';
+        else if(c.warn>=5 || wf>0.25) cls='hm-w2';
+        else if(c.warn>=1 || wf>0.05) cls='hm-w1';
         else cls='hm-ok';
         title=day+' '+String(h).padStart(2,'0')+':00 - '+c.ok+' ok, '+c.warn+' degraded, '+c.bad+' down';
       }
@@ -1206,7 +1220,7 @@ function heatmapHtml(a){
   });
   html+='</div>';
   html+=`<div class="hmx" style="grid-template-columns:${cols}"><span></span>${Array.from({length:24},(_,h)=>`<span>${h%3===0?h:''}</span>`).join('')}</div>`;
-  html+=`<div class="tleg"><i><b class="hm-ok"></b> healthy hour</i><i><b class="hm-w1"></b> some degradation</i><i><b class="hm-w2"></b> heavy degradation</i><i><b class="hm-bad"></b> went down</i><i><b class="hm-gap"></b> no data</i></div>`;
+  html+=`<div class="tleg"><i><b class="hm-ok"></b> clean hour</i><i><b class="hm-w1"></b> 1-4 degraded samples</i><i><b class="hm-w2"></b> 5+ degraded samples</i><i><b class="hm-bad"></b> went down</i><i><b class="hm-gap"></b> no data</i></div>`;
   return sec('WHEN IT HAPPENS','hour of day x date - occupancy patterns show up here',html);
 }
 
