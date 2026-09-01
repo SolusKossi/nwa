@@ -584,6 +584,10 @@ function analyzeMonitor(meta, ticks){
   const dnsM=rows.filter(r=>r.dns!=null&&r.dns>=0);
   const dnsWarm=dnsM.length>1?dnsM.slice(1):dnsM;
   const dnsFails=rows.filter(r=>r.dnsFail).length;
+  // A lookup that fails while the link is down is the outage, not a DNS fault. Counting
+  // both makes one event look like two and sends people off changing their resolver.
+  const dnsFailsUp=rows.filter(r=>r.dnsFail&&!r.down).length;
+  const dnsFailsDown=dnsFails-dnsFailsUp;
   const dnsSlowArr=dnsWarm.filter(r=>r.dns>=300);
   const dnsSlow=dnsSlowArr.length;
   const dnsSlowWorst=dnsSlowArr.length?Math.max(...dnsSlowArr.map(r=>r.dns)):null;
@@ -634,7 +638,13 @@ function analyzeMonitor(meta, ticks){
   const on5=bands.some(b=>/5\s*g/i.test(b)), on24=bands.some(b=>/2\.4/i.test(b));
   const rates=rows.map(r=>r.rx).filter(v=>v!=null);
   const minRate=rates.length?Math.min(...rates):null;
-  const lowRate=rows.filter(r=>r.rx!=null && r.rx<60).length;
+  const lowRateRows=rows.filter(r=>r.rx!=null && r.rx<60);
+  const lowRate=lowRateRows.length;
+  // A low PHY rate is only evidence of a weak link if the signal was weak at the time.
+  // Adapters also wind the rate down when the link is idle, which is harmless.
+  const lowRateSig=lowRateRows.filter(r=>r.sig!=null);
+  const lowRateWeakPct=lowRateSig.length?Math.round(100*lowRateSig.filter(r=>r.sig<50).length/lowRateSig.length):null;
+  const lowRateHarm=lowRateRows.some(r=>r.down||(r.loss!=null&&r.loss>0)||(r.jit!=null&&r.jit>=30));
   rows.forEach(r=>{ r.gwBad = gwUsable && r.gw!=null && !r.gwReach && !r.down; });
 
   // congestion / adapter / ipv6
@@ -747,11 +757,17 @@ function analyzeMonitor(meta, ticks){
       'If users reported an outage at these times, add a watched service with -Sites to collect application-level evidence.',
       icmpOnlyRows.map(r=>r.t));
   }
-  if(dnsFails){
+  if(dnsFailsUp){
     const da=dnsAdvice(meta.dnsServers);
-    P(dnsFails>=3?'bad':'warn', `DNS failed ${dnsFails}x`,
-      'Names sometimes stopped resolving even when the connection was up - pages would randomly fail to load.',
+    P(dnsFailsUp>=3?'bad':'warn', `DNS failed ${dnsFailsUp}x`,
+      'Names stopped resolving while the connection was otherwise up - pages would randomly fail to load.'
+      +(dnsFailsDown?` A further ${dnsFailsDown} lookup${dnsFailsDown>1?'s':''} failed during the outages above; those are the outage, not a DNS fault.`:''),
       `${da.curStr?`Your current DNS is ${da.curStr}. `:''}Set DNS to 1.1.1.1 / 8.8.8.8 (Adapter settings -> IPv4 -> Properties) for more reliable lookups.`,
+      tTimes(r=>r.dnsFail&&!r.down));
+  } else if(dnsFailsDown){
+    P('warn', `DNS failed ${dnsFailsDown}x, all during the outages`,
+      `Every failed lookup happened while the connection was already down, so this is the outage showing up a second time rather than a separate DNS problem.`,
+      'Nothing to change on DNS. Chase the outages above instead.',
       tTimes(r=>r.dnsFail));
   }
   if(spikes){
@@ -760,7 +776,7 @@ function analyzeMonitor(meta, ticks){
       'If on Wi-Fi, reduce distance/interference. Check if something was saturating the line (big downloads/uploads).',
       tTimes(r=>r.best!=null&&r.best>=120));
   }
-  if(dnsSlow && !dnsFails){
+  if(dnsSlow && !dnsFailsUp){
     P('warn', `Slow DNS on ${dnsSlow} check${dnsSlow>1?'s':''}`,
       `DNS resolved but lagged (up to ${dnsSlowWorst} ms${dnsAvg!=null?`, avg ${dnsAvg} ms`:''}) - pages occasionally "hang" before loading.`,
       dnsSwitchFix(meta.dnsServers,'Switching DNS to 1.1.1.1 / 8.8.8.8 usually fixes intermittent slow lookups.'),
@@ -803,11 +819,18 @@ function analyzeMonitor(meta, ticks){
       `This PC is on the 5 GHz band - faster, but noticeably shorter range than 2.4 GHz. A weak 5 GHz signal fits the "access point is too far" theory well.`,
       'Compare this client\'s RSSI to the cable users\' room on your controller; test 2.4 GHz or move closer, or use Ethernet.');
   }
-  if(lowRate){
+  // Weak signal at those moments, or harm alongside them, is what makes a rate dip worth
+  // reporting. Healthy signal and nothing else wrong is just idle rate adaptation.
+  const lowRateWeak = lowRateWeakPct==null || lowRateWeakPct>=50;
+  if(lowRate && (lowRateWeak || lowRateHarm)){
     P('warn', `Wi-Fi link rate fell low (${lowRate}x under 60 Mbps, min ${minRate} Mbps)`,
-      `The negotiated Wi-Fi PHY rate dropped to levels that struggle with calls and big transfers - the fingerprint of a weak/distant link.`,
-      'Correlate with the signal dips below; a closer AP or Ethernet fixes it.',
-      tTimes(r=>r.rx!=null&&r.rx<60));
+      lowRateWeak
+        ? `The negotiated Wi-Fi PHY rate dropped to levels that struggle with calls and big transfers - the fingerprint of a weak/distant link.`
+        : `The negotiated Wi-Fi PHY rate dipped below 60 Mbps, but the signal was healthy at ${100-lowRateWeakPct}% of those moments - so this is not about distance. It lines up with the loss or jitter above, which is why it is worth a look.`,
+      lowRateWeak
+        ? 'Correlate with the signal dips below; a closer AP or Ethernet fixes it.'
+        : 'Signal is fine here, so moving the AP will not help. Look at channel congestion and interference instead.',
+      lowRateRows.map(r=>r.t));
   }
   if(coChanOthers!=null && coChanOthers>=3){
     P(coChanOthers>=6?'bad':'warn', `Crowded Wi-Fi channel (${coChanOthers} other networks on channel ${congChan})`,
@@ -859,7 +882,7 @@ function analyzeMonitor(meta, ticks){
   // verdict
   let verdict;
   const svcDown = httpSeries.find(h=>h.fails && h.failUp>0);
-  const wifiInstab = (lossTicks||jitHigh||roams||gwDropWhileUp||sigDips||lowRate);
+  const wifiInstab = (lossTicks||jitHigh||roams||gwDropWhileUp||sigDips||(lowRate&&(lowRateWeak||lowRateHarm)));
   if(problems.some(p=>p.level==='bad')){
     if(!outages.length && svcDown) verdict={level:'bad', ic:'X', big:svcDown.host.toUpperCase()+' UNREACHABLE'};
     else if(!outages.length && wifiInstab && onWifi) verdict={level:'bad', ic:'X', big:'WI-FI INSTABILITY'};
@@ -882,7 +905,7 @@ function analyzeMonitor(meta, ticks){
     value: h.fails? (h.reachPct>=99.95?'99.9%':h.reachPct.toFixed(1)+'%') : (h.avgMs!=null?h.avgMs+' ms':'OK')}));
   checks.push(
     {label:'Avg latency', status:avgLat==null?'bad':avgLat>=120?'warn':'ok', value:avgLat==null?'--':avgLat.toFixed(0)+' ms'},
-    {label:'DNS fails', status:dnsFails?(dnsFails>=3?'bad':'warn'):'ok', value:String(dnsFails)});
+    {label:'DNS fails', status:dnsFailsUp?(dnsFailsUp>=3?'bad':'warn'):'ok', value:String(dnsFailsUp)});
   if(onWifi) checks.push({label:'Min Wi-Fi', status:minSig<40?(minSig<25?'bad':'warn'):'ok', value:minSig+'%'});
   if(roams) checks.push({label:'Roams', status:findLvl('Roamed')||'warn', value:String(roams)});
   if(activeSec>=8*3600) checks.push({label:'Office hours', status:thinOffice?'warn':'ok', value:Math.round(officePct)+'%'});
@@ -892,7 +915,7 @@ function analyzeMonitor(meta, ticks){
   if(ipv6) checks.push({label:'IPv6', status:'ok', value: ipv6.reachable?(ipv6.ms!=null?ipv6.ms+' ms':'yes'):'n/a'});
 
   const a = {rows,outages,interval,targets,httpSeries,verdict,checks,problems,
-    uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsAvg,minSig,maxSig,onWifi,startT,endT,t0,t1,spanSec,N,
+    uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsFailsUp,dnsFailsDown,dnsAvg,minSig,maxSig,onWifi,startT,endT,t0,t1,spanSec,N,
     hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,icmpOnlyN:icmpOnlyRows.length,
     gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamTimes,roamPairs,bandSwitches,aps,bands,on5,on24,minRate,lowRate,
     radio:(rows.find(r=>r.radio)||{}).radio,
@@ -1364,7 +1387,7 @@ function monitorHtml(run){
     (a.gwUsable?`<p class="line">gateway ${esc(pv('ip',meta.gateway||''))}: reachable <b>${a.gwReachPct!=null?a.gwReachPct.toFixed(1)+'%':'--'}</b>${a.gwAvg!=null?` - avg <b>${a.gwAvg} ms</b>`:''} - drops-while-up <b>${a.gwDropWhileUp}</b></p>`
       :(meta.gateway?`<p class="line dim">gateway ${esc(pv('ip',meta.gateway))} never answered ping (blocks ICMP) - gateway-hop signal unavailable.</p>`:''))+
     (meta.activeRoute?`<p class="line dim">active IPv4 path: ${esc(meta.activeRoute.alias||'interface '+meta.activeRoute.ifIndex)} via ${esc(pv('ip',meta.activeRoute.nextHop||''))}${meta.activeRoute.metric!=null?` - metric ${meta.activeRoute.metric}`:''}</p>`:'')+
-    `<p class="line">DNS avg <b>${a.dnsAvg!=null?a.dnsAvg+' ms':'--'}</b> - DNS fails <b>${a.dnsFails}</b> - DNS servers <b>${esc((meta.dnsServers||[]).join(', ')||'unknown')}</b>${meta.dnsIsPublic===false?' <span style="color:var(--muted)">(on-LAN resolver - cannot prove internet reachability)</span>':''}</p>`+
+    `<p class="line">DNS avg <b>${a.dnsAvg!=null?a.dnsAvg+' ms':'--'}</b> - DNS fails <b>${a.dnsFailsUp}</b>${a.dnsFailsDown?` <span style="color:var(--muted)">(+${a.dnsFailsDown} during outages)</span>`:''} - DNS servers <b>${esc((meta.dnsServers||[]).join(', ')||'unknown')}</b>${meta.dnsIsPublic===false?' <span style="color:var(--muted)">(on-LAN resolver - cannot prove internet reachability)</span>':''}</p>`+
     (meta.dnsIsPublic!=null||(meta.httpTargets&&meta.httpTargets.length)?`<p class="line dim">outage confirmation: ping plus ${[meta.dnsIsPublic?'off-LAN DNS':null,(meta.httpTargets&&meta.httpTargets.length)?'watched sites':null].filter(Boolean).join(' / ')||'nothing else (ping failures counted as outages)'}</p>`:'')+
     a.httpSeries.map(h=>`<p class="line">${esc(h.host)}: reachable <b>${h.reachPct>=99.95?'100%':h.reachPct.toFixed(2)+'%'}</b>${h.avgMs!=null?` - avg <b>${h.avgMs} ms</b>`:''} - unreachable <b>${h.fails}</b>${h.slow?` - slow <b>${h.slow}</b>`:''}</p>`).join(''));
 
@@ -1478,7 +1501,7 @@ function compareHtml(mons){
     met('Min Wi-Fi signal',a=>a.minSig,'hi'),
     met('Roams per day',a=>a.roams?+(a.roams/a.activeDays).toFixed(1):0,'lo'),
     met('Disconnects',a=>a.wlanDiscs.length,'lo'),
-    met('DNS fails',a=>a.dnsFails,'lo'),
+    met('DNS fails',a=>a.dnsFailsUp,'lo'),
   ];
   const fmtv=(m,v)=>{ if(v==null) return '--';
     if(m.label==='Uptime') return v.toFixed(v>=99.99?0:2)+'%';
