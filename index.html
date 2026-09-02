@@ -5,247 +5,333 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>nwa - network analysis</title>
 <style>
-  :root{
-    --p:#4ade80; --p-dim:#9aa3af; --amber:#fbbf24; --red:#f87171; --blue:#60a5fa;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-    --bg:#0b0d12; --bg2:#0f1218; --card:#141821; --card2:#181d28; --line:#232936; --line2:#2e3648;
-    --text:#e8eaf0; --muted:#8b93a7;
-    --acc:#4f8df9; --acc2:#8b5cf6;
-    --ok:#22c55e; --ok-bg:#0f2519; --ok-bd:#1e4d32;
-    --warn:#f59e0b; --warn-bg:#271f0c; --warn-bd:#54400f;
-    --bad:#ef4444; --bad-bg:#291313; --bad-bd:#582222;
-    --run0:#4f8df9; --run1:#f59e0b; --run2:#10b981; --run3:#a855f7;
-  }
-  *{box-sizing:border-box}
-  html{scrollbar-gutter:stable;scroll-behavior:smooth}
-  body{margin:0;color:var(--text);overflow-x:hidden;
-    background:var(--bg);
-    background-image:radial-gradient(1200px 500px at 70% -10%, rgba(79,141,249,.07), transparent 60%),
-                     radial-gradient(900px 420px at 10% 0%, rgba(139,92,246,.05), transparent 55%);
-    background-attachment:fixed;
-    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
-  a{color:var(--acc)}
-  ::selection{background:rgba(79,141,249,.35)}
-  ::-webkit-scrollbar{width:11px;height:11px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:#2a3140;border-radius:6px;border:2px solid var(--bg)}
-  ::-webkit-scrollbar-thumb:hover{background:#39425a}
+/* Dark-first charcoal, one muted periwinkle accent, and the status colours kept
+   strictly semantic so green never doubles as branding. Mono carries the chrome,
+   labels and numbers; sans carries prose, because findings are meant to be read.
+   Panels are marked by corner ticks rather than full borders - crop marks on an
+   instrument rather than boxes on a page. */
+:root{
+  --bg:#0d0e13; --panel:#14161d; --panel-2:#1a1d26; --panel-3:#222630;
+  --line:#272b36; --line-2:#353a49;
+  --text:#e7e8ef; --dim:#a4a7b6; --muted:#6d7185;
 
-  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  @keyframes popIn{0%{opacity:0;transform:scale(.92)}70%{transform:scale(1.02)}100%{opacity:1;transform:scale(1)}}
-  @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(255,255,255,.25)}100%{box-shadow:0 0 0 12px rgba(255,255,255,0)}}
-  @keyframes drift{from{background-position:0 0}to{background-position:56px 0}}
-  @media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation:none !important;transition:none !important} }
+  --acc:#6f8fd6; --acc-hi:#9db4ea; --acc-dim:#46587f;
+  --acc-soft:rgba(111,143,214,.16);
 
-  /* app bar */
-  .appbar{background:rgba(15,18,24,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:relative;z-index:5}
-  .appbar-inner{max-width:1120px;margin:0 auto;padding:15px 20px;display:flex;align-items:baseline;gap:14px}
-  .brand{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.5px;
-    background:linear-gradient(92deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
-  .brand-sub{font-size:13px;color:var(--muted)}
+  --ok:#5bc08f; --warn:#d3a05a; --bad:#e07070;
+  --ok-bg:rgba(91,192,143,.10); --warn-bg:rgba(211,160,90,.10); --bad-bg:rgba(224,112,112,.10);
+  --ok-bd:rgba(91,192,143,.38); --warn-bd:rgba(211,160,90,.38); --bad-bd:rgba(224,112,112,.42);
 
-  .container{max-width:1120px;margin:0 auto;padding:26px 20px 90px}
+  --run0:#6f8fd6; --run1:#d3a05a; --run2:#5bc08f; --run3:#a98fd0;
 
-  /* cards */
-  .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:14px;
-    padding:20px;margin:0 0 18px;transition:border-color .25s, transform .25s;animation:fadeUp .45s ease both}
-  .card:hover{border-color:var(--line2)}
-  .card-title{font-size:15px;font-weight:650;margin:0 0 8px;display:flex;align-items:center;gap:10px}
-  .step-num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;
-    background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-radius:8px;font-size:13px;font-weight:700}
+  --r:4px; --r-sm:3px;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --spring:cubic-bezier(.34,1.56,.64,1);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box}
+html{scrollbar-gutter:stable;scroll-behavior:smooth}
+body{
+  margin:0;color:var(--text);background:var(--bg);overflow-x:hidden;
+  font:13.5px/1.55 var(--mono);-webkit-font-smoothing:antialiased;
+}
+/* Graph paper, not scanlines: this is an instrument screen, and a horizontal
+   stripe pattern moires badly over dense line charts. Very low contrast, and it
+   ignores the pointer so nothing underneath stops being clickable. */
+body::after{
+  content:'';position:fixed;inset:0;z-index:90;pointer-events:none;opacity:.5;
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 32px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.014) 0 1px,transparent 1px 32px);
+}
+a{color:var(--acc-hi);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:var(--acc-soft)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--panel-3);border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--line-2)}
 
-  .muted{color:var(--muted);font-size:13px}
-  .note{color:var(--muted);font-size:13px;margin:12px 0 0;line-height:1.65}
-  kbd{font-family:var(--mono);font-size:12px;background:#1d2330;border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:1px 6px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@keyframes edgeFade{from{opacity:1}to{opacity:0}}
+@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
+@keyframes traceIn{to{stroke-dashoffset:0}}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
 
-  .cmdwrap{position:relative;margin:10px 0 14px}
-  .cmd{background:#0b0e14;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0;
-    font-family:var(--mono);font-size:12.5px;line-height:1.6;color:#b9c3d9;
-    max-height:200px;overflow-y:auto;overflow-x:hidden;white-space:pre-wrap;word-break:break-word}
-  .cmd-copy{position:absolute;top:8px;right:8px}
+/* ------------------------------------------------------------- topbar --- */
+.appbar{
+  position:sticky;top:0;z-index:30;
+  background:rgba(13,14,19,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line-2);
+}
+.appbar-inner{max-width:1240px;margin:0 auto;padding:0 20px;height:52px;
+  display:flex;align-items:baseline;gap:10px}
+.brand{font-weight:650;font-size:15px;letter-spacing:.02em;color:var(--text)}
+/* The wordmark carries a small drawn-in trace, the same idea as the terminal's
+   sweep: a line crossing a scope, resolving into the name. */
+.brand::before{
+  content:'';display:inline-block;width:16px;height:8px;margin-right:7px;
+  background:linear-gradient(90deg,var(--acc-dim),var(--acc-hi));
+  clip-path:polygon(0 60%,18% 60%,28% 15%,42% 85%,56% 40%,68% 60%,100% 60%,100% 72%,0 72%);
+  animation:fadeUp .5s var(--ease) both;
+}
+.brand-sub{color:var(--muted);font-size:12px}
+#sticky{
+  position:sticky;top:52px;z-index:25;display:none;
+  background:rgba(13,14,19,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+}
+#sticky .in{max-width:1240px;margin:0 auto;padding:9px 20px;
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+.nav a{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+  padding:5px 9px;border-radius:var(--r-sm)}
+.nav a:hover{background:var(--panel-2);color:var(--text);text-decoration:none}
 
-  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.container{max-width:1240px;margin:0 auto;padding:22px 20px 90px}
 
-  /* buttons */
-  .btn{font:inherit;font-weight:600;font-size:13.5px;cursor:pointer;color:var(--text);
-    background:linear-gradient(180deg,#1d2330,#171c26);border:1px solid var(--line2);
-    padding:8px 15px;border-radius:9px;position:relative;
-    transition:transform .15s, border-color .2s, box-shadow .2s, background .2s}
-  .btn:hover{border-color:#3d4763;box-shadow:0 3px 14px rgba(0,0,0,.35), 0 0 0 1px rgba(79,141,249,.12);transform:translateY(-1px)}
-  .btn:active{transform:translateY(0) scale(.98)}
-  .btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:transparent;color:#fff}
-  .btn.primary:hover{box-shadow:0 4px 18px rgba(79,141,249,.35);filter:brightness(1.08)}
-  .btn.sm{font-size:12.5px;padding:6px 12px}
-  .btn.on{border-color:var(--acc);color:#bcd3ff;box-shadow:inset 0 0 0 1px rgba(79,141,249,.4)}
+/* -------------------------------------------------------------- bits --- */
+.muted{color:var(--muted)}
+.dim{color:var(--dim)}
+.small{font-size:12.5px}
+.line{margin:5px 0}
+.row{display:flex;gap:8px;align-items:center}
 
-  /* dropzone */
-  #drop{border:2px dashed #333c4f;border-radius:12px;padding:32px;text-align:center;cursor:pointer;
-    background:rgba(255,255,255,.015);transition:border-color .25s, background .25s, transform .2s;
-    display:flex;flex-direction:column;gap:6px;align-items:center}
-  #drop:hover,#drop.hot{border-color:var(--acc);background:rgba(79,141,249,.06);transform:translateY(-1px)}
-  #drop:hover .drop-icon,#drop.hot .drop-icon{transform:translateY(3px)}
-  #drop strong{font-size:15px}
-  .drop-icon{font-size:26px;color:var(--acc);line-height:1;transition:transform .25s}
-  .err{color:var(--bad);font-size:13.5px;margin-top:10px;font-weight:500}
+button,.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:7px 13px;border-radius:var(--r-sm);
+  border:1px solid var(--line-2);background:var(--panel-2);color:var(--text);
+  font-family:var(--mono);font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;
+  transition:background .15s,border-color .15s,transform .12s var(--spring),box-shadow .15s;
+}
+.btn:hover{background:var(--panel-3);border-color:var(--muted);transform:translateY(-1px)}
+.btn:active{transform:translateY(1px) scale(.99)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#0d0e13;font-weight:650}
+.btn.primary:hover{background:var(--acc-hi);border-color:var(--acc-hi)}
+.btn.on{background:var(--acc-soft);border-color:var(--acc);color:var(--acc-hi)}
+button:disabled{opacity:.45;cursor:default}
 
-  /* sections */
-  .sec{margin:26px 0;animation:fadeUp .45s ease both}
-  .sec-h{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;font-weight:700;
-    text-transform:uppercase;letter-spacing:.12em;color:#aeb7cb;margin:0 0 13px;padding-bottom:9px;border-bottom:1px solid var(--line)}
-  .sec-h::before{content:"";width:14px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--acc),var(--acc2));flex:none}
-  .sec-h .rule{display:none}
-  .sec-h .tag{margin-left:auto;font-family:inherit;font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11.5px}
-  p.line{margin:6px 0;font-size:14px}
-  p.dim{color:var(--muted)}
-  .empty{color:var(--muted);font-size:13.5px;background:rgba(255,255,255,.02);border:1px dashed var(--line2);border-radius:10px;padding:12px 14px}
+/* Panels are marked by corner ticks, not enclosed by borders. */
+.card,.sec,.prob,.chk,.runhead{position:relative}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px 20px;margin-bottom:14px;animation:fadeUp .4s var(--ease) both}
+.card-title{font-size:14px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:9px}
+.step-num{display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:var(--r-sm);
+  background:var(--acc-soft);color:var(--acc-hi);font-size:11.5px;font-weight:700}
+.note{color:var(--dim);font-size:12.5px;line-height:1.6;margin:11px 0 0}
+.err{color:var(--bad);font-size:12.5px;margin-top:9px;min-height:1em}
 
-  /* verdict */
-  .verdict{display:flex;align-items:flex-start;gap:16px;border:1px solid;border-radius:16px;padding:19px 21px;margin:0 0 16px;
-    animation:popIn .4s ease both}
-  .verdict .ic{font-family:var(--mono);font-size:19px;font-weight:800;width:46px;height:46px;border-radius:14px;
-    display:flex;align-items:center;justify-content:center;flex:none;color:#fff;animation:pulseRing 2.6s ease-out infinite}
-  .verdict .big{font-size:21px;font-weight:750;letter-spacing:-.01em}
-  .verdict .small{font-size:13px;color:var(--muted);margin-top:3px}
-  .verdict .story{font-size:14px;margin-top:11px;line-height:1.65;color:var(--text)}
-  .verdict .acts{margin:10px 0 0;padding:0 0 0 18px;font-size:13.5px;line-height:1.75}
-  .v-ok{background:linear-gradient(180deg,rgba(34,197,94,.10),var(--ok-bg));border-color:var(--ok-bd)} .v-ok .ic{background:var(--ok)} .v-ok .big{color:#4ade80}
-  .v-warn{background:linear-gradient(180deg,rgba(245,158,11,.10),var(--warn-bg));border-color:var(--warn-bd)} .v-warn .ic{background:var(--warn)} .v-warn .big{color:#fbbf24}
-  .v-bad{background:linear-gradient(180deg,rgba(239,68,68,.10),var(--bad-bg));border-color:var(--bad-bd)} .v-bad .ic{background:var(--bad)} .v-bad .big{color:#f87171}
+/* -------------------------------------------------------- section head --- */
+.sec{margin:26px 0 0;animation:fadeUp .4s var(--ease) both}
+.sec-h{display:flex;align-items:center;gap:10px;margin:0 0 11px;
+  font-size:11px;font-weight:650;letter-spacing:.13em;text-transform:uppercase;color:var(--acc-hi)}
+.sec-h::before{content:'';width:7px;height:7px;flex:none;
+  border-left:1px solid var(--acc);border-top:1px solid var(--acc)}
+/* Ruler ticks rather than an even dash: a measuring scale, not a dotted line. */
+.sec-h .rule{flex:1;height:7px;
+  background:repeating-linear-gradient(90deg,
+    var(--line-2) 0 1px,transparent 1px 7px,
+    var(--line) 7px 8px,transparent 8px 14px);
+  align-self:center}
+.sec-h .tag{color:var(--muted);font-weight:450;letter-spacing:.06em;text-transform:none;font-size:11.5px}
 
-  /* checks */
-  .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 8px}
-  .chk{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:11px;padding:12px 14px;
-    transition:transform .2s, border-color .2s;animation:fadeUp .4s ease both}
-  .chk:hover{transform:translateY(-2px)}
-  .chk:nth-child(2){animation-delay:.03s}.chk:nth-child(3){animation-delay:.06s}.chk:nth-child(4){animation-delay:.09s}
-  .chk:nth-child(5){animation-delay:.12s}.chk:nth-child(6){animation-delay:.15s}.chk:nth-child(7){animation-delay:.18s}
-  .chk .cl{font-size:12px;color:var(--muted);font-weight:500}
-  .chk .cv{font-size:18px;font-weight:700;margin-top:4px;display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
-  .chk .cv::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
-  .chk.ok .cv::before{background:var(--ok);box-shadow:0 0 8px rgba(34,197,94,.6)} .chk.ok{border-color:var(--ok-bd)}
-  .chk.warn .cv::before{background:var(--warn);box-shadow:0 0 8px rgba(245,158,11,.6)} .chk.warn{border-color:var(--warn-bd)}
-  .chk.bad .cv::before{background:var(--bad);box-shadow:0 0 8px rgba(239,68,68,.6)} .chk.bad{border-color:var(--bad-bd)}
+/* ------------------------------------------------------------ verdict --- */
+.verdict{
+  display:flex;gap:15px;padding:17px 19px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--panel);margin-bottom:16px;
+  animation:fadeUp .45s var(--spring) both;position:relative;
+}
+/* Corner ticks: the signature panel treatment. */
+.verdict::before,.verdict::after{content:'';position:absolute;width:9px;height:9px;
+  border-color:currentColor;border-style:solid;opacity:.5;pointer-events:none}
+.verdict::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+.verdict::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+.verdict.v-ok{border-color:var(--ok-bd);background:linear-gradient(var(--ok-bg),transparent);color:var(--ok)}
+.verdict.v-warn{border-color:var(--warn-bd);background:linear-gradient(var(--warn-bg),transparent);color:var(--warn)}
+.verdict.v-bad{border-color:var(--bad-bd);background:linear-gradient(var(--bad-bg),transparent);color:var(--bad)}
+/* Explicit per-variant background: currentColor here would resolve to the icon's
+   own overridden text colour, painting a dark glyph on a dark chip. */
+.verdict .ic{flex:none;width:34px;height:34px;border-radius:var(--r);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:15px;background:var(--muted);color:#0d0e13;
+  animation:popIn .45s var(--spring) both}
+.verdict.v-ok .ic{background:var(--ok)}
+.verdict.v-warn .ic{background:var(--warn)}
+.verdict.v-bad .ic{background:var(--bad)}
+.verdict .big{font-size:16px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.verdict .small{color:var(--dim);margin-top:2px;font-size:12.5px}
+.verdict .story{color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.62;margin-top:11px}
+.acts{font-family:var(--sans);font-size:14px;line-height:1.62;color:var(--dim);
+  margin:9px 0 0;padding-left:19px}
+.acts li{margin:4px 0}
+.acts li::marker{color:var(--acc-hi)}
 
-  /* findings */
-  .prob{display:flex;gap:12px;padding:14px 16px;border-radius:12px;margin:0 0 10px;
-    border:1px solid var(--line);background:var(--card);align-items:flex-start;font-size:14px;line-height:1.55;cursor:pointer;
-    transition:transform .18s, border-color .2s, box-shadow .2s;animation:fadeUp .4s ease both}
-  .prob:hover{transform:translateX(3px);box-shadow:-3px 0 0 0 var(--acc)}
-  .prob.focus{box-shadow:-3px 0 0 0 var(--acc), 0 0 0 1px rgba(79,141,249,.35)}
-  .prob .pt{flex:none;font-family:var(--mono);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-    padding:3px 10px;border-radius:7px;color:#fff;margin-top:1px}
-  .prob.bad{border-color:var(--bad-bd);background:linear-gradient(180deg,rgba(239,68,68,.07),var(--card))} .prob.bad .pt{background:var(--bad)}
-  .prob.warn{border-color:var(--warn-bd);background:linear-gradient(180deg,rgba(245,158,11,.07),var(--card))} .prob.warn .pt{background:var(--warn)}
-  .prob.ok{border-color:var(--ok-bd);background:linear-gradient(180deg,rgba(34,197,94,.07),var(--card))} .prob.ok .pt{background:var(--ok)}
-  .prob b{font-weight:650;color:var(--text)}
-  .when{display:inline-block;font-family:var(--mono);font-size:11.5px;font-weight:600;color:#c7cede;background:#1d2330;
-    border:1px solid var(--line2);border-radius:6px;padding:1px 8px;margin-left:4px;white-space:nowrap}
-  .pfix{margin-top:9px;font-size:13.5px;color:#bcd4f5;background:rgba(79,141,249,.08);border:1px solid rgba(79,141,249,.25);border-radius:9px;padding:9px 11px}
-  .pfix::before{content:"Suggested fix - ";font-weight:700}
-  .occ{margin-top:8px;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+/* -------------------------------------------------------- stat tiles --- */
+.checks{display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));margin-bottom:8px}
+.chk{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:11px 13px;animation:fadeUp .4s var(--ease) both;
+  transition:border-color .2s,transform .18s var(--ease)}
+.chk:hover{border-color:var(--line-2);transform:translateY(-1px)}
+.chk .cl{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em}
+.chk .cv{font-size:17px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:7px}
+.chk .cv::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.chk.ok .cv::before{background:var(--ok)}
+.chk.warn .cv::before{background:var(--warn)}
+.chk.bad .cv::before{background:var(--bad);box-shadow:0 0 0 3px rgba(224,112,112,.16)}
+.chk.warn{border-color:var(--warn-bd)}
+.chk.bad{border-color:var(--bad-bd)}
 
-  /* legacy DOM strips (services) */
-  .timeline{display:flex;gap:1px;height:38px;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:10px 0 6px;background:#1a1f2b}
-  .tcol{flex:1 1 0;min-width:1px;transition:filter .15s}
-  .tcol:hover{filter:brightness(1.35)}
-  .t-ok{background:#22c55e} .t-warn{background:#f59e0b} .t-bad{background:#ef4444} .t-gap{background:#4b5563}
-  .tleg{display:flex;gap:18px;font-size:12px;color:var(--muted);margin:8px 0 0;flex-wrap:wrap}
-  .tleg i{font-style:normal;display:inline-flex;align-items:center;gap:6px}
-  .tleg b{width:11px;height:11px;border-radius:3px;display:inline-block}
+/* ------------------------------------------------------------- pills --- */
+.vp{display:inline-flex;align-items:center;justify-content:center;
+  min-width:20px;height:18px;padding:0 6px;border-radius:20px;
+  font-size:10.5px;font-weight:800;letter-spacing:.04em}
+.vp.ok{background:var(--ok-bg);color:var(--ok)}
+.vp.warn{background:var(--warn-bg);color:var(--warn)}
+.vp.bad{background:var(--bad-bg);color:var(--bad)}
+.pt{flex:none;display:inline-flex;align-items:center;justify-content:center;
+  min-width:38px;height:19px;padding:0 8px;border-radius:20px;
+  font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.prob.bad .pt{background:var(--bad-bg);color:var(--bad)}
+.prob.warn .pt{background:var(--warn-bg);color:var(--warn)}
+.prob.ok .pt{background:var(--ok-bg);color:var(--ok)}
+.runchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+.runchip b{width:8px;height:8px;border-radius:50%;display:inline-block}
 
-  /* canvas charts */
-  .stripwrap{position:relative;margin:10px 0 4px}
-  .strip{display:block;width:100%;height:38px;border:1px solid var(--line);border-radius:8px;background:#151a24;cursor:crosshair;
-    transition:border-color .2s}
-  .strip:hover{border-color:var(--line2)}
-  .brushhint{font-size:12px;color:var(--muted);margin:6px 0 0}
-  .chartwrap{position:relative;margin:12px 0 0;animation:fadeUp .5s ease both}
-  .chartwrap canvas.base{display:block;width:100%;border:1px solid var(--line);border-radius:8px;background:#10141c;transition:border-color .2s}
-  .chartwrap:hover canvas.base{border-color:var(--line2)}
-  .chartwrap canvas.ovl{position:absolute;left:0;top:0;width:100%;pointer-events:none}
-  .chartlbl{position:absolute;left:10px;top:6px;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);pointer-events:none;letter-spacing:.04em}
-  .readout{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:8px 0 0;min-height:18px;white-space:nowrap;overflow:hidden}
-  .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:4px 0 0}
+/* ---------------------------------------------------------- findings --- */
+.prob{display:flex;gap:11px;padding:12px 14px;margin-bottom:8px;
+  border:1px solid var(--line);border-left-width:2px;border-radius:var(--r-sm);
+  background:var(--panel);cursor:pointer;
+  transition:border-color .2s,background .2s,transform .18s var(--ease),box-shadow .2s;
+  animation:fadeUp .4s var(--ease) both}
+.prob:hover{background:var(--panel-2);border-color:var(--line-2);
+  transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.prob.bad{border-left-color:var(--bad)}
+.prob.warn{border-left-color:var(--warn)}
+.prob.ok{border-left-color:var(--ok);cursor:default}
+.prob b{font-family:var(--sans);font-size:14.5px;font-weight:600}
+.prob .when{color:var(--muted);font-size:11.5px}
+.prob>div:last-child{font-family:var(--sans);font-size:14px;line-height:1.55;color:var(--dim)}
+.pfix{margin-top:7px;padding:8px 11px;border-radius:var(--r-sm);
+  background:var(--panel-3);border-left:2px solid var(--acc);
+  font-size:13.5px;color:var(--text)}
+.occ{margin-top:6px;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.occ summary{cursor:pointer}
+.occ summary::marker{color:var(--acc-dim)}
+.focus{outline:2px solid var(--acc);outline-offset:2px}
 
-  /* heatmap */
-  .hm{display:grid;grid-auto-rows:16px;gap:2px;margin:8px 0 4px}
-  .hmlbl{font-size:11px;color:var(--muted);font-family:var(--mono);align-self:center;white-space:nowrap;padding-right:6px}
-  .hmc{border-radius:3px;background:#1d2330;transition:transform .12s}
-  .hmc:hover{transform:scale(1.25)}
-  .hm-ok{background:#22c55e} .hm-w1{background:#b98a0a} .hm-w2{background:#f59e0b} .hm-bad{background:#ef4444} .hm-gap{background:#4b5563}
-  .hmx{display:grid;gap:2px;font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px}
-  .hmx span{text-align:center}
+/* ------------------------------------------------------------- runs --- */
+.runblock{margin-bottom:34px}
+.runhead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;
+  padding:9px 13px;margin-bottom:13px;border-left:2px solid var(--acc);
+  background:var(--panel);border-radius:0 var(--r-sm) var(--r-sm) 0}
 
-  /* compare */
-  .runchip{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:13px}
-  .runchip b{width:11px;height:11px;border-radius:3px;display:inline-block}
-  .delta td.win{color:#4ade80;font-weight:700}
-  .delta td.lose{color:#f87171;font-weight:700}
-  .runhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:36px 0 12px;padding:11px 15px;
-    background:linear-gradient(90deg,rgba(255,255,255,.03),transparent);border:1px solid var(--line);
-    border-left-width:5px;border-radius:10px;font-size:14px;animation:fadeUp .4s ease both}
-  .runhead .vp{margin-left:auto}
-  .vp{font-family:var(--mono);font-size:12px;font-weight:800;padding:2px 9px;border-radius:7px;color:#fff}
-  .vp.ok{background:var(--ok)} .vp.warn{background:var(--warn)} .vp.bad{background:var(--bad)}
+/* ------------------------------------------------------------ tables --- */
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{position:sticky;top:0;background:var(--panel-2);color:var(--muted);
+  font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;
+  text-align:left;padding:8px 11px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+td{padding:7px 11px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2);color:var(--text)}
+.empty{color:var(--muted);text-align:center;padding:26px 14px;font-size:13px;
+  border:1px dashed var(--line);border-radius:var(--r-sm)}
 
-  /* sticky bar */
-  #sticky{position:sticky;top:0;z-index:50;display:none;background:rgba(15,18,24,.82);backdrop-filter:blur(12px);
-    border-bottom:1px solid var(--line)}
-  #sticky .in{max-width:1120px;margin:0 auto;padding:8px 20px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  #sticky .nav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
-  #sticky .nav a{font-size:12.5px;font-weight:600;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;
-    transition:background .15s,color .15s}
-  #sticky .nav a:hover{background:rgba(79,141,249,.12);color:var(--text)}
+/* ------------------------------------------------------------ charts --- */
+.stripwrap{position:relative;margin-bottom:9px}
+.strip{width:100%;display:block;border-radius:var(--r-sm);cursor:crosshair;
+  border:1px solid var(--line)}
+.brushhint{position:absolute;right:8px;top:7px;font-size:10.5px;color:var(--muted);pointer-events:none}
+.tleg,.chartlbl{display:flex;align-items:center;gap:13px;flex-wrap:wrap;
+  font-size:10.5px;color:var(--muted);margin:6px 0 2px}
+.tleg i{display:inline-flex;align-items:center;gap:5px;font-style:normal}
+.tleg b{width:9px;height:9px;border-radius:2px;display:inline-block}
+.t-ok{background:var(--ok)}.t-warn{background:var(--warn)}
+.t-bad{background:var(--bad)}.t-gap{background:var(--line-2)}
+.chartwrap{position:relative;margin-bottom:11px}
+/* Scoped to canvas: .cv is also the stat tile's value, which must not pick up a
+   chart border. */
+canvas.cv{width:100%;display:block;border-radius:var(--r-sm);border:1px solid var(--line)}
+.ovl{position:absolute;inset:0;pointer-events:none}
+.axis{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px}
+.readout{font-size:11.5px;color:var(--dim);min-height:1.3em;margin:3px 0 9px}
+.timeline{margin-bottom:5px}
+.tbar{display:flex;height:100%}
+.tcol{flex:1 1 0;min-width:0}
+.st-up{background:var(--ok)}.st-down{background:var(--bad)}
 
-  /* tables */
-  .scroll{overflow-y:auto;overflow-x:hidden;border:1px solid var(--line);border-radius:10px;max-height:360px}
-  table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--mono);table-layout:fixed}
-  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);
-    white-space:normal;overflow-wrap:anywhere;word-break:break-word;vertical-align:top;font-variant-numeric:tabular-nums}
-  th{background:#1a1f2b;color:#aeb7cb;font-weight:650;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;position:sticky;top:0;z-index:1}
-  tbody tr{transition:background .12s}
-  tbody tr:hover td{background:rgba(79,141,249,.06)}
-  .st-up{color:var(--ok);font-weight:600} .st-down{color:var(--bad);font-weight:600}
-  .lvl{padding:1px 6px;border-radius:5px;font-size:11px;font-weight:600}
-  .Lerror,.Lcritical{color:var(--bad);background:var(--bad-bg)}
-  .Lwarning{color:var(--warn);background:var(--warn-bg)}
-  .Linformation{color:var(--acc);background:rgba(79,141,249,.1)}
-  .pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:11px;font-weight:600}
-  .pill.up{background:var(--ok-bg);color:#4ade80} .pill.down{background:var(--bad-bg);color:#f87171}
+/* ----------------------------------------------------------- heatmap --- */
+.hm{display:grid;gap:2px;font-size:10px}
+.hmc{height:15px;border-radius:2px;background:var(--panel-2);
+  transition:transform .14s var(--spring),outline-color .14s}
+.hmc:hover{transform:scale(1.22);outline:1px solid var(--acc-hi);position:relative;z-index:2}
+.hm-ok{background:rgba(91,192,143,.30)}
+.hm-w1{background:rgba(211,160,90,.34)}
+.hm-w2{background:rgba(211,160,90,.72)}
+.hm-bad{background:var(--bad)}
+.hm-gap{background:var(--panel-2)}
+.hmlbl,.hmx{color:var(--muted);font-size:10px;white-space:nowrap}
 
-  details{margin:12px 0 0}
-  details>summary{cursor:pointer;color:var(--acc);font-size:13.5px;font-weight:600;list-style:none;padding:8px 0;transition:color .15s}
-  details>summary:hover{color:#7fadff}
-  details>summary::-webkit-details-marker{display:none}
-  details>summary::before{content:"\25B8  ";color:var(--muted)}
-  details[open]>summary::before{content:"\25BE  "}
+/* ----------------------------------------------------------- compare --- */
+.delta{font-weight:650}
+.up{color:var(--ok)}.down{color:var(--bad)}
+.lose{color:var(--bad)}
+.win{color:var(--ok)}
+.pgr{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin:7px 0}
+.pill{padding:2px 8px;border-radius:20px;background:var(--panel-3);
+  color:var(--dim);font-size:11px;font-weight:600}
+.resetbar{display:flex;justify-content:flex-end;margin-bottom:7px}
+.lvl,.k,.v,.d,.rd,.rds{font-family:var(--mono)}
+.k{color:var(--muted)}
+.v{color:var(--text)}
+.base{color:var(--muted);font-size:11.5px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.Lcritical,.Lerror{color:var(--bad)}
+.Lwarning{color:var(--warn)}
+.Linformation{color:var(--dim)}
 
-  .rds{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2px 28px}
-  .rd{display:flex;align-items:baseline;font-size:14px;padding:6px 0;border-bottom:1px solid #1c212c}
-  .rd .k{color:var(--muted);font-size:13px}
-  .rd .d{flex:1;margin:0 8px;border-bottom:1px dotted #333c4f;transform:translateY(-4px)}
-  .rd .v{font-weight:650}
-  .rd .v small{color:var(--muted);font-weight:400}
+/* ------------------------------------------------------------ intake --- */
+.cmdwrap{position:relative;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--panel-2);overflow:hidden}
+.cmdwrap::before{content:'command';display:block;padding:5px 11px;
+  background:var(--panel-3);border-bottom:1px solid var(--line);
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.cmd{margin:0;padding:12px 13px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.65;color:var(--text);
+  white-space:pre;background:transparent}
+.cmd-copy{position:absolute;top:5px;right:7px;z-index:2}
+#drop{border:2px dashed var(--line-2);border-radius:var(--r);
+  padding:28px 18px;text-align:center;cursor:pointer;background:var(--panel-2);
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  transition:border-color .18s,background .18s,transform .18s var(--ease)}
+#drop:hover,#drop.hot{border-color:var(--acc);background:var(--acc-soft)}
+#drop.hot{transform:scale(1.01)}
+.drop-icon{font-size:21px;color:var(--acc-hi);line-height:1}
 
-  /* samples toolbar */
-  .tbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
-  .tbar select,.tbar input{font:inherit;font-size:13px;border:1px solid var(--line2);border-radius:8px;
-    padding:6px 10px;background:#171c26;color:var(--text);transition:border-color .2s}
-  .tbar select:focus,.tbar input:focus{outline:none;border-color:var(--acc)}
-  .tbar input{min-width:180px}
-  .pgr{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);margin:10px 0 0}
+/* Travelling bar, same idea as the terminal pulse. */
+.sweepbar{position:relative;height:2px;border-radius:2px;overflow:hidden;
+  background:var(--acc-soft);margin-top:9px}
+.sweepbar::after{content:'';position:absolute;inset:0 auto 0 0;width:38%;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--acc-hi),transparent);
+  animation:sweep 2.4s ease-in-out infinite}
 
-  #out{display:none}
-  .resetbar{display:flex;align-items:center;gap:12px;margin:0 0 16px;color:var(--muted);font-size:13px;flex-wrap:wrap}
-
-  @media print{ #sticky,.resetbar,.tbar,.pgr{display:none !important} }
+@media (max-width:720px){
+  .container{padding:18px 14px 70px}
+  .appbar-inner,#sticky .in{padding-left:14px;padding-right:14px}
+  .brand-sub{display:none}
+  .checks{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))}
+}
 </style>
 </head>
 <body>
 <header class="appbar">
   <div class="appbar-inner">
     <div class="brand">nwa</div>
-    <div class="brand-sub">network analysis - runs locally, nothing is uploaded</div>
+    <div class="brand-sub" id="brandWhere">network analysis - runs locally, nothing is uploaded</div>
   </div>
 </header>
 
@@ -359,6 +445,8 @@ function newScan(){
   $('#out').style.display='none'; $('#out').innerHTML='';
   $('#sticky').style.display='none';
   $('#intake').style.display=''; $('#loadErr').textContent='';
+  const bw=$('#brandWhere');
+  if(bw) bw.textContent='network analysis - runs locally, nothing is uploaded';
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -912,7 +1000,7 @@ function analyzeMonitor(meta, ticks){
   if(wlanDiscs.length) checks.push({label:'Disconnects', status:findLvl('Wi-Fi disconnect')||'warn', value:String(wlanDiscs.length)});
   if(ethRows.length) checks.push({label:'Wired link', status:ethDowngraded?(ethMin<=100?'bad':'warn'):'ok', value:(ethMin!=null?(ethDowngraded?ethMin+' Mbps!':ethMax+' Mbps'):'--')});
   if(coChanOthers!=null) checks.push({label:'Ch. neighbours', status:coChanOthers>=6?'bad':coChanOthers>=3?'warn':'ok', value:String(coChanOthers)});
-  if(ipv6) checks.push({label:'IPv6', status:'ok', value: ipv6.reachable?(ipv6.ms!=null?ipv6.ms+' ms':'yes'):'n/a'});
+  if(ipv6 && ipv6.reachable) checks.push({label:'IPv6', status:'ok', value: ipv6.ms!=null?ipv6.ms+' ms':'yes'});
 
   const a = {rows,outages,interval,targets,httpSeries,verdict,checks,problems,
     uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsFailsUp,dnsFailsDown,dnsAvg,minSig,maxSig,onWifi,startT,endT,t0,t1,spanSec,N,
@@ -972,11 +1060,21 @@ function buildNarrative(a, meta){
 /* ---------- canvas chart engine (time-proportional) ---------- */
 let CHARTQ = [];                 // draw jobs registered while building HTML
 const HOVER = {};                // groupId -> {rows, charts:[{cv,ovl,cfg}], readout, strip, run}
-const RUNCOLORS = ['#3b82f6','#f59e0b','#10b981','#a855f7'];
-function chartTheme(){ return {bg:'#10141c', grid:'#232936', text:'#8b93a7', gap:'rgba(107,114,128,.28)'}; }
-const APCOLORS=['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb923c'];
+/* Canvas cannot read CSS custom properties, so pull them once and hand the
+   values to the chart code. One palette for the stylesheet, the charts and the
+   PowerShell dashboard, rather than three sets of hexes drifting apart. */
+const CSSV = (n,f) => { try { const v=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v||f; } catch(_){ return f; } };
+const C = {
+  acc:CSSV('--acc','#6f8fd6'), accHi:CSSV('--acc-hi','#9db4ea'), accDim:CSSV('--acc-dim','#46587f'),
+  ok:CSSV('--ok','#5bc08f'), warn:CSSV('--warn','#d3a05a'), bad:CSSV('--bad','#e07070'),
+  panel:CSSV('--panel','#14161d'), line:CSSV('--line','#272b36'),
+  line2:CSSV('--line-2','#353a49'), muted:CSSV('--muted','#6d7185'),
+};
+const RUNCOLORS = [C.acc, C.warn, C.ok, CSSV('--run3','#a98fd0')];
+function chartTheme(){ return {bg:C.panel, grid:C.line, text:C.muted, gap:'rgba(109,113,133,.26)'}; }
+const APCOLORS=[C.acc, C.accHi, C.ok, C.warn, CSSV('--run3','#a98fd0'), '#c79ad8'];
 function apColor(a,bssid){ const i=a.aps.indexOf(bssid); return APCOLORS[(i<0?0:i)%APCOLORS.length]; }
-function bandColor(b){ return /2\.4/.test(b||'') ? '#f59e0b' : '#60a5fa'; }
+function bandColor(b){ return /2\.4/.test(b||'') ? C.warn : C.acc; }
 function rleSegs(rows,key,colorFn,tEnd){
   const segs=[]; let cur=null;
   rows.forEach(r=>{ const v=r[key]; if(v==null) return;
@@ -984,7 +1082,7 @@ function rleSegs(rows,key,colorFn,tEnd){
   if(cur){ cur.t1=tEnd; segs.push(cur); }
   return segs;
 }
-const EVCOLOR = {roam:'#f59e0b', band:'#3b82f6', disc:'#ef4444'};
+const EVCOLOR = {roam:C.warn, band:C.acc, disc:C.bad};
 
 function setupCanvas(cv, hCss){
   const w = Math.max(200, cv.parentElement.clientWidth || cv.clientWidth || 600);
@@ -1008,14 +1106,14 @@ function drawStrip(run){
   (a.gapList||[]).forEach(g=>{ const x1=px(g.tms), x2=px(g.tms+g.dur*1000);
     for(let x=x1;x<=x2;x++){ if(buck[x]<0) buck[x]=RANK.gap; } });
   for(let x=1;x<w;x++){ if(buck[x]<0) buck[x]=buck[x-1]; }        // forward-fill
-  const COL={0:'#22c55e',1:'#f59e0b',2:'#4b5563',3:'#ef4444'};
+  const COL={0:C.ok,1:C.warn,2:C.line2,3:C.bad};
   ctx.fillStyle=T.bg; ctx.fillRect(0,0,w,h);
   for(let x=0;x<w;x++){ if(buck[x]>=0){ ctx.fillStyle=COL[buck[x]]; ctx.fillRect(x,2,1,h-4); } }
   // brush selection
   if(run.view){
     const x1=px(run.view[0]), x2=px(run.view[1]);
-    ctx.fillStyle='rgba(59,130,246,.25)'; ctx.fillRect(x1,0,Math.max(2,x2-x1),h);
-    ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.strokeRect(x1+.5,.5,Math.max(2,x2-x1)-1,h-1);
+    ctx.fillStyle='rgba(111,143,214,.22)'; ctx.fillRect(x1,0,Math.max(2,x2-x1),h);
+    ctx.strokeStyle=C.acc; ctx.lineWidth=1.5; ctx.strokeRect(x1+.5,.5,Math.max(2,x2-x1)-1,h-1);
   }
   if(!cv._wired){
     cv._wired=true;
@@ -1106,7 +1204,7 @@ function drawChart(cv, cfg){
   // loss dots (red) at top
   (cfg.lossDots||[]).forEach(t=>{
     if(t<t0||t>t1) return;
-    ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(px(t),7,2.6,0,7); ctx.fill();
+    ctx.fillStyle=C.bad; ctx.beginPath(); ctx.arc(px(t),7,2.6,0,7); ctx.fill();
   });
   // ribbons (AP / band identity over time) along the bottom
   (cfg.ribbons||[]).forEach((rb,ri)=>{
@@ -1118,7 +1216,7 @@ function drawChart(cv, cfg){
     });
   });
   (cfg.dots||[]).forEach(d2=>{ if(d2.tms<t0||d2.tms>t1) return;
-    ctx.fillStyle=d2.color||'#ef4444'; ctx.beginPath(); ctx.arc(px(d2.tms),7,2.6,0,7); ctx.fill(); });
+    ctx.fillStyle=d2.color||C.bad; ctx.beginPath(); ctx.arc(px(d2.tms),7,2.6,0,7); ctx.fill(); });
   // y max label
   ctx.fillStyle=T.text; ctx.font='10.5px '+getComputedStyle(document.body).fontFamily;
   ctx.fillText(Math.round(maxV/1.06)+(cfg.unit||''), 6, h-7);
@@ -1162,7 +1260,7 @@ function wireHover(run){
         const cx=o.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0);
         cx.clearRect(0,0,w,o.clientHeight);
         const x=Math.round((r.tms-t0)/((t1-t0)||1)*w)+.5;
-        cx.strokeStyle='rgba(148,163,184,.8)'; cx.beginPath(); cx.moveTo(x,0); cx.lineTo(x,o.clientHeight); cx.stroke();
+        cx.strokeStyle='rgba(157,180,234,.85)'; cx.beginPath(); cx.moveTo(x,0); cx.lineTo(x,o.clientHeight); cx.stroke();
       });
     });
     cv.addEventListener('mouseleave',()=>{
@@ -1190,26 +1288,26 @@ function registerRunCharts(run){
   const defs=[
     mk('lat','latency ms'+(a.gwUsable?' - internet (color) + gateway (grey)':'')+' - red dots = packet loss','ms',
       rows=>rows.map(r=>[r.tms,r.best]),
-      {thresholds:[{v:120,color:'rgba(245,158,11,.6)'}],
+      {thresholds:[{v:120,color:'rgba(211,160,90,.6)'}],
        lossDots:a.rows.filter(r=>!r.down&&r.loss!=null&&r.loss>0).map(r=>r.tms),
-       extraSeries: a.gwUsable? [{color:'#94a3b8',pts:a.rows.map(r=>[r.tms,(r.gw!=null&&r.gw>=0)?r.gw:null])}] : []}),
+       extraSeries: a.gwUsable? [{color:C.muted,pts:a.rows.map(r=>[r.tms,(r.gw!=null&&r.gw>=0)?r.gw:null])}] : []}),
   ];
-  if(a.hasQ) defs.push(mk('jit','jitter ms','ms',rows=>rows.map(r=>[r.tms,r.jit]),{thresholds:[{v:30,color:'rgba(245,158,11,.6)'}]}));
+  if(a.hasQ) defs.push(mk('jit','jitter ms','ms',rows=>rows.map(r=>[r.tms,r.jit]),{thresholds:[{v:30,color:'rgba(211,160,90,.6)'}]}));
   if(a.onWifi) defs.push(mk('sig','Wi-Fi signal % - ribbons: AP (upper) / band (lower)','%',rows=>rows.map(r=>[r.tms,r.sig]),
-    {thresholds:[{v:40,color:'rgba(239,68,68,.5)'}],yMin:100,
+    {thresholds:[{v:40,color:'rgba(224,112,112,.5)'}],yMin:100,
      ribbons:[{segs:rleSegs(a.rows.filter(r=>r.bssid),'bssid',v=>apColor(a,v),a.t1)},
               {segs:rleSegs(a.rows.filter(r=>r.band),'band',bandColor,a.t1)}]}));
   if(a.rows.some(r=>r.dns!=null&&r.dns>=0)) defs.push(mk('dns','dns response ms - red dots = lookup failed','ms',
     rows=>rows.map(r=>[r.tms,(r.dns!=null&&r.dns>=0)?r.dns:null]),
-    {thresholds:[{v:300,color:'rgba(245,158,11,.6)'}],
-     dots:a.rows.filter(r=>r.dnsFail).map(r=>({tms:r.tms,color:'#ef4444'}))}));
+    {thresholds:[{v:300,color:'rgba(211,160,90,.6)'}],
+     dots:a.rows.filter(r=>r.dnsFail).map(r=>({tms:r.tms,color:C.bad}))}));
   if(a.onWifi && a.rows.some(r=>r.rx!=null)) defs.push(mk('rate','link rate Mbps','',rows=>rows.map(r=>[r.tms,r.rx])));
   if(a.httpSeries.length){
     const sites=a.httpSeries.slice(0,4);
     defs.push(mk('svc','service response ms - '+sites.map(h=>h.host).join(', ')+' - red dots = unreachable','ms',
       null,
       {multi:sites.map((h,i)=>({color:APCOLORS[i%APCOLORS.length],pts:h.samples.map(s=>[+new Date(s.t),s.ok?s.ms:null])})),
-       dots:[].concat(...sites.map(h=>h.samples.filter(s=>!s.ok).map(s=>({tms:+new Date(s.t),color:'#ef4444'}))))}));
+       dots:[].concat(...sites.map(h=>h.samples.filter(s=>!s.ok).map(s=>({tms:+new Date(s.t),color:C.bad}))))}));
   }
   HOVER[run.id]={charts:[],run};
   defs.forEach(d=>{
@@ -1319,6 +1417,16 @@ function monitorHtml(run){
   html+=`<div class="checks">${a.checks.map(c=>
     `<div class="chk ${c.status}"><div class="cl">${esc(c.label)}</div><div class="cv">${esc(c.value)}</div></div>`).join('')}</div>`;
 
+  const probHtml = a.problems.length ? a.problems.map((p,i)=>{
+    const wl=whenLabel(p.times);
+    const occ = p.times.length>2 ? `<details class="occ"><summary>all ${p.times.length} times</summary>${p.times.map(t=>esc(fmtTime(t))).join(' - ')}</details>` : '';
+    return `<div class="prob ${p.level}" id="pf-${run.id}-${i}" onclick="focusFinding('${run.id}',${i})" title="Click to filter the samples table to these moments">
+      <span class="pt">${p.level==='bad'?'Fix':'Check'}</span>
+      <div><b>${esc(p.title)}</b>${wl?` <span class="when">${esc(wl)}</span>`:''} - ${esc(p.detail)}${p.fix?`<div class="pfix">${esc(p.fix)}</div>`:''}${occ}</div></div>`;
+  }).join('') : `<div class="prob ok" style="cursor:default"><span class="pt">OK</span>
+      <div><b>Nothing went wrong while monitoring.</b> Connection stayed up with steady latency and healthy DNS${a.httpSeries.length?`, and every watched service stayed reachable`:''}. If your problem didn't reproduce, leave the monitor running longer.</div></div>`;
+  html+=sec('WHAT HAPPENED','click a finding to see its samples',probHtml, run.id+'-find');
+
   html+=sec('TIMELINE','drag on the strip to zoom - double-click to reset',
     `<div class="stripwrap"><canvas class="strip" id="strip-${run.id}"></canvas></div>
      <div class="tleg"><i><b class="t-ok"></b> healthy</i><i><b class="t-warn"></b> degraded</i><i><b class="t-bad"></b> down</i><i><b class="t-gap"></b> no data</i>
@@ -1354,15 +1462,6 @@ function monitorHtml(run){
       run.id+'-wifi');
   }
 
-  const probHtml = a.problems.length ? a.problems.map((p,i)=>{
-    const wl=whenLabel(p.times);
-    const occ = p.times.length>2 ? `<details class="occ"><summary>all ${p.times.length} times</summary>${p.times.map(t=>esc(fmtTime(t))).join(' - ')}</details>` : '';
-    return `<div class="prob ${p.level}" id="pf-${run.id}-${i}" onclick="focusFinding('${run.id}',${i})" title="Click to filter the samples table to these moments">
-      <span class="pt">${p.level==='bad'?'Fix':'Check'}</span>
-      <div><b>${esc(p.title)}</b>${wl?` <span class="when">${esc(wl)}</span>`:''} - ${esc(p.detail)}${p.fix?`<div class="pfix">${esc(p.fix)}</div>`:''}${occ}</div></div>`;
-  }).join('') : `<div class="prob ok" style="cursor:default"><span class="pt">OK</span>
-      <div><b>Nothing went wrong while monitoring.</b> Connection stayed up with steady latency and healthy DNS${a.httpSeries.length?`, and every watched service stayed reachable`:''}. If your problem didn't reproduce, leave the monitor running longer.</div></div>`;
-  html+=sec('WHAT HAPPENED','click a finding to see its samples',probHtml, run.id+'-find');
 
   // data section
   let raw='';
@@ -1372,14 +1471,15 @@ function monitorHtml(run){
     raw+=sec('OUTAGE LOG',`${a.outages.length} event${a.outages.length>1?'s':''}`, table(oHead,
       a.outages.map(o=>{ const c=[esc(fmtTime(o.start)),esc(fmtTime(o.end)),fmtDur(o.count*a.interval),o.count];
         if(hasTrace) c.push(o.trace&&o.trace.length?esc(o.trace.join(' > ')):'--'); return c; })));
-  } else raw+=sec('OUTAGE LOG','', `<p class="empty">No full outages recorded.</p>`);
+  }
   if(a.gapList.length){
     raw+=sec('NO-DATA GAPS',`${a.gapList.length} gap${a.gapList.length>1?'s':''} (machine asleep or off)`, table(['Last sample before gap','Missing'],
       a.gapList.map(g=>[esc(fmtTime(g.t)),fmtDur(g.dur)])));
   }
-  raw+=sec('WI-FI DISCONNECT LOG', a.wlanDiscs.length? `${a.wlanDiscs.length} event${a.wlanDiscs.length>1?'s':''} (Windows WLAN-AutoConfig)`:'',
-    a.wlanDiscs.length ? table(['Time','Reason'], a.wlanDiscs.slice(-100).map(e=>[esc(fmtTime(e.t)),esc(String(e.msg||'').replace(/^disconnect:?\s*/,'')||'unspecified')]))
-      : `<p class="empty">No hard disconnects recorded by Windows - transitions were clean roams${a.bssidHidden?' (note: Location was off)':''}.</p>`);
+  if(a.wlanDiscs.length){
+    raw+=sec('WI-FI DISCONNECT LOG', `${a.wlanDiscs.length} event${a.wlanDiscs.length>1?'s':''} (Windows WLAN-AutoConfig)`,
+      table(['Time','Reason'], a.wlanDiscs.slice(-100).map(e=>[esc(fmtTime(e.t)),esc(String(e.msg||'').replace(/^disconnect:?\s*/,'')||'unspecified')])));
+  }
   raw+=sec('SESSION STATS','',
     `<p class="line">uptime <b>${a.uptimePct.toFixed(2)}%</b> - offline <b>${fmtDur(a.totalDownSec)}</b>${a.noDataSec>600?` - no data <b>${fmtDur(a.noDataSec)}</b>`:''} - avg latency <b>${a.avgLat!=null?a.avgLat.toFixed(0)+' ms':'--'}</b> - p95 <b>${a.p95!=null?a.p95+' ms':'--'}</b> - spikes <b>${a.spikes}</b></p>`+
     (a.ethRows.length?`<p class="line">wired link: <b>${a.ethMax} Mbps</b>${a.ethDowngraded?` - <span style="color:var(--amber)">dropped to ${a.ethMin} Mbps (${a.ethShifts.length} change${a.ethShifts.length>1?'s':''})</span>`:''}</p>`:'')+
@@ -1533,7 +1633,7 @@ function compareHtml(mons){
        <div class="tleg">${mons.map(m=>`<i><span class="runchip"><b style="background:${RUNCOLORS[m.ci%4]}"></b>${esc(pv('host',m.meta.computerName||m.name))}</span></i>`).join('')}</div>`);
     CHARTQ.push({runId:'cmp', draw:()=>{
       const c1=document.getElementById('cmp-lat'), c2=document.getElementById('cmp-sig');
-      if(c1) drawChart(c1,{h:110,t0,t1,unit:'ms',series:mons.map(m=>({color:RUNCOLORS[m.ci%4],pts:m.a.rows.map(r=>[r.tms,r.best])})),thresholds:[{v:120,color:'rgba(245,158,11,.6)'}]});
+      if(c1) drawChart(c1,{h:110,t0,t1,unit:'ms',series:mons.map(m=>({color:RUNCOLORS[m.ci%4],pts:m.a.rows.map(r=>[r.tms,r.best])})),thresholds:[{v:120,color:'rgba(211,160,90,.6)'}]});
       if(c2) drawChart(c2,{h:110,t0,t1,unit:'%',yMin:100,series:mons.map(m=>({color:RUNCOLORS[m.ci%4],pts:m.a.rows.map(r=>[r.tms,r.sig])}))});
       const ax=document.getElementById('ax-cmp'); if(ax) ax.innerHTML='<span>'+esc(fmtTime(t0))+'</span><span>'+esc(fmtTime(t1))+'</span>';
     }});
@@ -1629,6 +1729,19 @@ function renderAll(){
     return `<a href="#${r.id}" class="runchip" style="text-decoration:none;color:var(--text)"><b style="background:${RUNCOLORS[r.ci%4]}"></b>${esc(nm)} ${vpill(lvl)}</a>`;
   }).join(' ');
   $('#stickyVerdicts').innerHTML=sv;
+  // The machine and window this report describes is the most orienting fact on
+  // the page, so it goes in the topbar rather than buried in a chip row.
+  const bw=$('#brandWhere');
+  if(bw){
+    const m0=mons[0];
+    if(m0 && m0.a.N){
+      const bits=[pv('host',m0.meta.computerName||m0.name), fmtDur(m0.a.activeSec), fmtDate(m0.a.startT)];
+      if(m0.meta.runLabel) bits.splice(1,0,m0.meta.runLabel);
+      bw.textContent='/ '+bits.join('  -  ')+(mons.length>1?`  (+${mons.length-1} more)`:'');
+    } else if(RUNS.length===1){
+      bw.textContent='/ '+pv('host',(RUNS[0].data&&RUNS[0].data.system||{}).computerName||RUNS[0].name);
+    }
+  }
   const nav=[]; if(mons.length>1) nav.push('<a href="#cmp">Compare</a>');
   const r0=mons[0]||RUNS[0];
   if(r0 && r0.kind==='monitor') nav.push(`<a href="#${r0.id}-tl">Timeline</a>`,`<a href="#${r0.id}-wifi">Wi-Fi</a>`,`<a href="#${r0.id}-find">Findings</a>`,`<a href="#${r0.id}-data">Data</a>`);

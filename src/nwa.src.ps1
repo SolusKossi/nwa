@@ -514,204 +514,351 @@ function Format-Elapsed([timespan]$ts){
 function Add-Ev([string]$s){ $stEvents.Add($s); while ($stEvents.Count -gt 3) { $stEvents.RemoveAt(0) } }
 
 # --- dashboard rendering ---
+# One rounded panel with a legend tab, muted labels down the left, and enough
+# motion that the thing reads as alive between samples. The source stays ASCII:
+# every box-drawing glyph goes in as a [char] code point, because a stray
+# non-ASCII byte in this file stops Windows PowerShell parsing it at all.
+
+$E = [char]27
+$script:RST = $E + '[0m'
+$script:EL  = $E + '[K'
+$script:frame = 0
+
+# Truecolour and box drawing need a terminal that processes VT sequences.
+# Windows Terminal and PowerShell 7 both do; older consoles get an ASCII panel
+# in the 16 console colours instead, which is why every row is built as
+# (text, token) segments rather than as pre-coloured strings.
+$script:Fancy = $false
+if ($env:WT_SESSION) { $script:Fancy = $true }
+elseif ($PSVersionTable.PSVersion.Major -ge 7) { $script:Fancy = $true }
+if ($env:NWA_PLAIN) { $script:Fancy = $false }
+if ($script:Fancy) {
+  # Consoles often default to an OEM code page, which draws the rounded corners
+  # and the braille spinner as '?'. Without UTF-8 the panel falls apart.
+  try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { $script:Fancy = $false }
+}
+
+# One palette, same token names as the report's CSS custom properties, so the
+# terminal and the HTML cannot drift into looking like two different tools.
+$script:Pal = @{
+  accent    = @(111,143,214); accentHi = @(157,180,234); accentDim = @(70,88,127)
+  fg        = @(232,232,242); dim      = @(166,166,184); muted     = @(111,111,128)
+  ok        = @(91,192,143);  warn     = @(211,160,90);  bad       = @(224,112,112)
+}
+$script:PalC = @{
+  accent='Blue'; accentHi='Cyan'; accentDim='DarkBlue'
+  fg='White'; dim='Gray'; muted='DarkGray'
+  ok='Green'; warn='Yellow'; bad='Red'
+}
+
+if ($script:Fancy) {
+  $script:G = @{
+    tl=[string][char]0x256D; tr=[string][char]0x256E; bl=[string][char]0x2570; br=[string][char]0x256F
+    h=[string][char]0x2500;  v=[string][char]0x2502;  ml=[string][char]0x251C; mr=[string][char]0x2524
+    dot=[string][char]0x00B7; bar=[string][char]0x2501; barDim=[string][char]0x2500; ell=[string][char]0x2026
+  }
+  $script:Spin = @([char]0x280B,[char]0x2819,[char]0x2839,[char]0x2838,[char]0x283C,
+                   [char]0x2834,[char]0x2826,[char]0x2827,[char]0x2807,[char]0x280F)
+} else {
+  $script:G = @{ tl='+'; tr='+'; bl='+'; br='+'; h='-'; v='|'; ml='+'; mr='+'
+                 dot='-'; bar='='; barDim='-'; ell='...' }
+  $script:Spin = @('|','/','-','\')
+}
+
+function Rgb([int]$r,[int]$g,[int]$b){ return ($E + '[38;2;' + $r + ';' + $g + ';' + $b + 'm') }
+function TokAnsi($tok){
+  if ($tok -is [array]) { return (Rgb $tok[0] $tok[1] $tok[2]) }
+  $c = $script:Pal[[string]$tok]; if (-not $c) { $c = $script:Pal['fg'] }
+  return (Rgb $c[0] $c[1] $c[2])
+}
+function TokCon($tok){
+  if ($tok -is [array]) { return 'Cyan' }
+  $c = $script:PalC[[string]$tok]; if (-not $c) { $c = 'Gray' }
+  return $c
+}
+function SegLen($row){ $n=0; foreach($s in $row){ $n += ([string]$s[0]).Length }; return $n }
+
+function Emit-Row($row,[int]$w){
+  if ($script:Fancy) {
+    $sb = New-Object System.Text.StringBuilder
+    foreach($s in $row){ [void]$sb.Append((TokAnsi $s[1])); [void]$sb.Append([string]$s[0]) }
+    [void]$sb.Append($script:RST); [void]$sb.Append($script:EL)
+    [Console]::WriteLine($sb.ToString())
+  } else {
+    $len = 0
+    foreach($s in $row){
+      Write-Host ([string]$s[0]) -NoNewline -ForegroundColor (TokCon $s[1])
+      $len += ([string]$s[0]).Length
+    }
+    if($len -lt $w){ Write-Host (' ' * ($w - $len)) -NoNewline }
+    Write-Host ''
+  }
+}
+
+function DashW {
+  $c = 100; try { $c = [Console]::WindowWidth } catch {}
+  if ($c -lt 60) { $c = 60 }
+  return [math]::Min($c - 4, 118)
+}
+function Clip([string]$s,[int]$n){
+  if ($null -eq $s) { return '' }
+  $s = ($s -replace '[\r\n\t]',' ')
+  if ($s.Length -gt $n) { return $s.Substring(0,[math]::Max(0,$n-1)) + $script:G.ell }
+  return $s
+}
+
+# --- brand ---------------------------------------------------------------
 $script:NwaLogo = @(
   ' _  _ __      ___   ',
   '| \| |\ \    / /_\  ',
   '| .` | \ \/\/ / _ \ ',
   '|_|\_|  \_/\_/_/ \_\'
 )
-$script:NwaTag = 'network analysis - github.com/SolusKossi/nwa'
+$script:NwaTag = 'network analysis'
 
-# a "row" is a list of segments; a segment is @(text, consoleColor)
-function New-Box([string]$title,$rows,[int]$w){
-  $inner = $w - 4
+# A highlight sweeps left to right across the letters, like a trace crossing a
+# scope. Runs of equal colour are merged so a frame is a handful of escape
+# sequences rather than one per character.
+function Banner-Rows([string]$hostName){
+  $lw = 0; foreach($l in $script:NwaLogo){ if($l.Length -gt $lw){ $lw = $l.Length } }
+  $span = $lw + 18
+  $head = ($script:frame * 2) % $span
   $out = New-Object System.Collections.Generic.List[object]
-  $t = '+-- ' + $title + ' '
-  $head = New-Object System.Collections.Generic.List[object]
-  $head.Add(@($t,'Cyan'))
-  $head.Add(@((('-' * [math]::Max(0,$w - $t.Length - 1)) + '+'),'DarkGray'))
-  $out.Add($head)
-  foreach($r in $rows){
-    $line = New-Object System.Collections.Generic.List[object]
-    $line.Add(@('| ','DarkGray'))
-    $len = 0
-    foreach($s in $r){
-      $txt = [string]$s[0]
-      if ($len -ge $inner) { break }
-      if ($len + $txt.Length -gt $inner) { $txt = $txt.Substring(0, $inner - $len) }  # clip to box
-      $line.Add(@($txt, $s[1]))
-      $len += $txt.Length
-    }
-    $line.Add(@(((' ' * [math]::Max(0,$inner - $len)) + ' |'),'DarkGray'))
-    $out.Add($line)
-  }
-  $foot = New-Object System.Collections.Generic.List[object]
-  $foot.Add(@(('+' + ('-' * ($w-2)) + '+'),'DarkGray'))
-  $out.Add($foot)
-  return ,$out
-}
-function Join-BoxRows($left,$right,[int]$lw,[int]$gap){
-  $n = [math]::Max($left.Count,$right.Count)
-  $out = New-Object System.Collections.Generic.List[object]
-  for($i=0;$i -lt $n;$i++){
+  for($i=0; $i -lt $script:NwaLogo.Count; $i++){
+    $line = $script:NwaLogo[$i]
     $row = New-Object System.Collections.Generic.List[object]
-    if($i -lt $left.Count){ foreach($s in $left[$i]){ $row.Add($s) } } else { $row.Add(@((' ' * $lw),'DarkGray')) }
-    $row.Add(@((' ' * $gap),'DarkGray'))
-    if($i -lt $right.Count){ foreach($s in $right[$i]){ $row.Add($s) } }
+    $row.Add(@('  ','muted'))
+    if ($script:Fancy) {
+      $cur = ''; $curTok = $null
+      for($x=0; $x -lt $line.Length; $x++){
+        $d = $head - $x
+        $tok = 'accentDim'
+        if ($d -eq 0 -or $d -eq 1) { $tok = @(200,216,250) }
+        elseif ($d -eq 2) { $tok = 'accentHi' }
+        elseif ($d -eq 3 -or $d -eq 4) { $tok = 'accent' }
+        if ($null -ne $curTok -and (($tok -is [array]) -ne ($curTok -is [array]) -or ("$tok" -ne "$curTok"))) {
+          $row.Add(@($cur,$curTok)); $cur = ''
+        }
+        $cur += $line[$x]; $curTok = $tok
+      }
+      if ($cur) { $row.Add(@($cur,$curTok)) }
+    } else {
+      $row.Add(@($line,'accent'))
+    }
+    if ($i -eq 1) { $row.Add(@(('   ' + $script:NwaTag),'muted')) }
+    if ($i -eq 2) { $row.Add(@(('   ' + $hostName),'fg')) }
     $out.Add($row)
   }
   return ,$out
 }
-function KV([string]$k,[string]$v,[string]$vc){
-  $r = New-Object System.Collections.Generic.List[object]
-  $r.Add(@($k.PadRight(9),'DarkGray')); $r.Add(@($v,$vc))
-  return ,$r
-}
-function KV2([string]$k1,[string]$v1,[string]$c1,[string]$k2,[string]$v2,[string]$c2,[int]$half){
-  $r = New-Object System.Collections.Generic.List[object]
-  $r.Add(@($k1.PadRight(9),'DarkGray'))
-  $r.Add(@($v1.PadRight([math]::Max($v1.Length + 2, $half - 9)),$c1))   # always at least 2 spaces before pair 2
-  $r.Add(@($k2.PadRight(9),'DarkGray'))
-  $r.Add(@($v2,$c2))
-  return ,$r
-}
-function HistSegs([string]$h){
+
+# --- panel ---------------------------------------------------------------
+function P-Top([string]$legend,[int]$w){
   $row = New-Object System.Collections.Generic.List[object]
-  if(-not $h){ $row.Add(@('-','DarkGray')); return ,$row }
-  $cur=''; $curC=''
-  foreach($ch in $h.ToCharArray()){
-    $c = 'DarkGray'
-    if($ch -eq '.'){ $c='DarkGreen' } elseif($ch -eq '!'){ $c='Yellow' } elseif($ch -eq 'x'){ $c='Red' }
-    if($c -ne $curC -and $cur){ $row.Add(@($cur,$curC)); $cur='' }
-    $cur += $ch; $curC = $c
-  }
-  if($cur){ $row.Add(@($cur,$curC)) }
+  $sp = [string]$script:Spin[$script:frame % $script:Spin.Count]
+  $row.Add(@(('  ' + $script:G.tl + $script:G.h + ' '),'accent'))
+  $row.Add(@(($sp + ' '),'accentHi'))
+  $row.Add(@($legend,'fg'))
+  $used = 4 + 2 + $legend.Length + 1
+  $dash = $w - $used - 1; if($dash -lt 0){ $dash = 0 }
+  $row.Add(@((' ' + ($script:G.h * $dash) + $script:G.tr),'accent'))
   return ,$row
 }
-function Write-SegRow($row,[int]$w){
-  $len = 0
-  foreach($s in $row){
-    $c = 'Gray'; if ($s.Count -gt 1 -and $s[1]) { $c = [string]$s[1] }
-    Write-Host ([string]$s[0]) -NoNewline -ForegroundColor $c
-    $len += ([string]$s[0]).Length
+function P-Rule([int]$w){
+  $row = New-Object System.Collections.Generic.List[object]
+  $row.Add(@(('  ' + $script:G.ml + ($script:G.h * ($w - 3)) + $script:G.mr),'accent'))
+  return ,$row
+}
+function P-Bot([int]$w){
+  $row = New-Object System.Collections.Generic.List[object]
+  $row.Add(@(('  ' + $script:G.bl + ($script:G.h * ($w - 3)) + $script:G.br),'accent'))
+  return ,$row
+}
+# label on the left in muted, then whatever segments the caller wants, padded
+# out so the right-hand rule always lands in the same column. Segments that
+# would run past the border are clipped rather than pushing it out of line.
+function P-Row([string]$label,$segs,[int]$w){
+  $row = New-Object System.Collections.Generic.List[object]
+  $row.Add(@(('  ' + $script:G.v + ' '),'accent'))
+  $row.Add(@(('{0,-10}' -f $label),'muted'))
+  $avail = $w - 4 - 10
+  $used = 0
+  foreach($s in $segs){
+    $t = [string]$s[0]
+    if ($used -ge $avail) { break }
+    if ($used + $t.Length -gt $avail) { $t = Clip $t ($avail - $used) }
+    $row.Add(@($t, $s[1]))
+    $used += $t.Length
   }
-  if($len -lt $w){ Write-Host (' ' * ($w - $len)) -NoNewline }
-  Write-Host ''
+  $pad = $avail - $used; if($pad -lt 0){ $pad = 0 }
+  $row.Add(@((' ' * $pad),'muted'))
+  $row.Add(@($script:G.v,'accent'))
+  return ,$row
+}
+# Both take a flat text,token,text,token,... list. PowerShell silently unrolls
+# nested arrays, so passing pairs as arrays-of-arrays turns a single-pair call
+# into two loose strings and the token gets printed as text.
+function One([string]$t,$tok){
+  $l = New-Object System.Collections.Generic.List[object]
+  $l.Add(@($t,$tok))
+  return ,$l
+}
+function Dotted([object[]]$flat){
+  $out = New-Object System.Collections.Generic.List[object]
+  for($i=0; $i -lt $flat.Count; $i+=2){
+    if($i -gt 0){ $out.Add(@(('  ' + $script:G.dot + '  '),'muted')) }
+    $out.Add(@([string]$flat[$i], $flat[$i+1]))
+  }
+  return ,$out
 }
 
-function Draw-Dash($d){
-  $w = 90
-  try { $w = [math]::Min(110, [math]::Max(70, [Console]::WindowWidth - 1)) } catch {}
+# Bright head travelling a dim rule. Driven by how far through the sampling
+# interval we are, so it doubles as a countdown rather than just decoration.
+function Pulse([int]$width,[double]$prog){
+  $out = New-Object System.Collections.Generic.List[object]
+  $pos = [int][math]::Round($prog * ($width - 1))
+  if ($script:Fancy) {
+    $cur = ''; $curTok = $null
+    for($i=0; $i -lt $width; $i++){
+      $d = $pos - $i
+      $ch = $script:G.barDim; $tok = 'accentDim'
+      if ($d -eq 0) { $ch = $script:G.bar; $tok = @(200,216,250) }
+      elseif ($d -eq 1) { $ch = $script:G.bar; $tok = 'accentHi' }
+      elseif ($d -eq 2 -or $d -eq 3) { $ch = $script:G.bar; $tok = 'accent' }
+      elseif ($d -gt 3) { $ch = $script:G.bar; $tok = 'accentDim' }
+      if ($null -ne $curTok -and (($tok -is [array]) -ne ($curTok -is [array]) -or ("$tok" -ne "$curTok"))) {
+        $out.Add(@($cur,$curTok)); $cur = ''
+      }
+      $cur += $ch; $curTok = $tok
+    }
+    if ($cur) { $out.Add(@($cur,$curTok)) }
+  } else {
+    $out.Add(@(($script:G.bar * [math]::Max(1,$pos)),'accent'))
+    $out.Add(@(($script:G.barDim * [math]::Max(0,$width - $pos)),'accentDim'))
+  }
+  return ,$out
+}
+
+function Hist-Segs([string]$h){
+  $out = New-Object System.Collections.Generic.List[object]
+  if(-not $h){ $out.Add(@('-','muted')); return ,$out }
+  $cur=''; $curTok=''
+  foreach($ch in $h.ToCharArray()){
+    $tok = 'muted'
+    if($ch -eq '.'){ $tok='ok' } elseif($ch -eq '!'){ $tok='warn' } elseif($ch -eq 'x'){ $tok='bad' }
+    if($tok -ne $curTok -and $cur){ $out.Add(@($cur,$curTok)); $cur='' }
+    $cur += $ch; $curTok = $tok
+  }
+  if($cur){ $out.Add(@($cur,$curTok)) }
+  return ,$out
+}
+
+# --- frame ---------------------------------------------------------------
+$script:dashDrawn = $false
+$script:lastRows = 0
+$script:lastD = $null
+
+function Draw-Dash($d, [double]$prog = 0.0){
+  $script:lastD = $d
+  $w = DashW
   try {
     if (-not $script:dashDrawn) { try { Clear-Host } catch {}; $script:dashDrawn = $true }
     [Console]::SetCursorPosition(0,0)
   } catch { $script:dashDrawn = $true }
 
   $rows = New-Object System.Collections.Generic.List[object]
+  $blank = New-Object System.Collections.Generic.List[object]; $blank.Add(@(' ','muted'))
 
-  # header: run info left, NWA logo + attribution right
-  $rw = $script:NwaTag.Length
-  $leftHead = @(
-    '',
-    (' NWA MONITOR   ' + $d.hostName),
-    (' up ' + $d.elapsed + '   ' + $d.n + ' samples   every ' + $d.interval + 's'),
-    ' [Q] stop and build report',
-    ''
-  )
-  for($i=0;$i -lt 5;$i++){
-    $r = New-Object System.Collections.Generic.List[object]
-    $lt = $leftHead[$i]
-    $r.Add(@($lt.PadRight([math]::Max(1,$w - $rw - 1)), $(if($i -eq 1){'White'}else{'DarkGray'})))
-    if($i -lt 4){ $r.Add(@($script:NwaLogo[$i].PadLeft($rw),'Cyan')) }
-    else        { $r.Add(@($script:NwaTag.PadLeft($rw),'DarkGray')) }
-    $rows.Add($r)
-  }
-  $blank = New-Object System.Collections.Generic.List[object]; $blank.Add(@(' ','DarkGray')); $rows.Add($blank)
-
-  # status colors
-  $stCol = 'Green'; if ($d.state -eq 'DOWN') { $stCol = 'Red' } elseif ($d.state -ne 'ok') { $stCol = 'Yellow' }
-  $sigCol = 'Green'; if ($d.sigVal -ne $null) { if ($d.sigVal -lt 40) { $sigCol='Red' } elseif ($d.sigVal -lt 60) { $sigCol='Yellow' } }
-  $lossCol = $(if($d.lossVal -gt 0){'Yellow'}else{'Gray'})
-  $jitCol  = $(if($d.jitVal -ge 30){'Yellow'}else{'Gray'})
-  $dnsCol  = $(if($d.dns -eq 'FAIL'){'Red'}else{'Gray'})
-
-  $twoCol = ($w -ge 86)
-  $bw = $(if($twoCol){ [int](($w - 2) / 2) } else { $w })
-  $half = [int](($bw - 4) / 2)
-
-  # CONNECTION box
-  $cRows = @(
-    (KV2 'status' $d.state $stCol 'ping' $d.ping 'Gray' $half),
-    (KV2 'loss' $d.loss $lossCol 'jitter' $d.jit $jitCol $half),
-    (KV2 'dns' $d.dns $dnsCol 'gateway' $d.gw 'Gray' $half)
-  )
-  # LINK box
-  if($d.wifi){
-    $lRows = @(
-      (KV2 'ssid' $d.ssid 'White' 'signal' $d.sig $sigCol $half),
-      (KV2 'band' $d.band 'Gray' 'rate' $d.rate 'Gray' $half),
-      (KV 'ap' $d.ap 'Gray')
-    )
-  } else {
-    $lRows = @(
-      (KV 'link' $d.link 'White'),
-      (KV 'ap' '-' 'DarkGray'),
-      (KV ' ' ' ' 'DarkGray')
-    )
-  }
-  # SESSION box
-  $sRows = @(
-    (KV2 'outages' ($d.outages + ' (' + $d.downDur + ')') $(if($d.outagesN -gt 0){'Yellow'}else{'Gray'}) 'loss t.' $d.lossN $(if([int]$d.lossN -gt 0){'Yellow'}else{'Gray'}) $half),
-    (KV2 'jit>=30' $d.jitN $(if([int]$d.jitN -gt 0){'Yellow'}else{'Gray'}) 'dns fail' $d.dnsN $(if([int]$d.dnsN -gt 0){'Yellow'}else{'Gray'}) $half),
-    (KV2 'roams' ([string]$d.roams) $(if([int]$d.roams -gt 0){'Yellow'}else{'Gray'}) 'aps seen' ([string]$d.aps) 'Gray' $half)
-  )
-  # EVENTS box
-  $eRows = New-Object System.Collections.Generic.List[object]
-  if($d.events.Count -eq 0){
-    $r0 = New-Object System.Collections.Generic.List[object]; $r0.Add(@('no events yet','DarkGray')); $eRows.Add($r0)
-  }
-  foreach($ev in $d.events){
-    $re = New-Object System.Collections.Generic.List[object]; $re.Add(@([string]$ev,'Yellow')); $eRows.Add($re)
-  }
-  while($eRows.Count -lt 3){
-    $rb = New-Object System.Collections.Generic.List[object]; $rb.Add(@(' ','DarkGray')); $eRows.Add($rb)
-  }
-
-  if($twoCol){
-    foreach($r in (Join-BoxRows (New-Box 'CONNECTION' $cRows $bw) (New-Box 'LINK' $lRows $bw) $bw ($w - 2*$bw))){ $rows.Add($r) }
-    foreach($r in (Join-BoxRows (New-Box 'SESSION' $sRows $bw) (New-Box 'EVENTS' $eRows $bw) $bw ($w - 2*$bw))){ $rows.Add($r) }
-  } else {
-    foreach($b in @((New-Box 'CONNECTION' $cRows $bw),(New-Box 'LINK' $lRows $bw),(New-Box 'SESSION' $sRows $bw),(New-Box 'EVENTS' $eRows $bw))){
-      foreach($r in $b){ $rows.Add($r) }
-    }
-  }
-
-  # sites + history (full width)
-  if($d.sites -and $d.sites -ne '-'){
-    $sRow = New-Object System.Collections.Generic.List[object]
-    $sRow.Add(@(' sites    ','DarkGray')); $sRow.Add(@($d.sites,'Gray'))
-    $rows.Add($sRow)
-    $rows.Add($blank)
-  }
-  $histW = [math]::Max(20, $w - 12)
-  $hRow = New-Object System.Collections.Generic.List[object]
-  $hRow.Add(@(' history  [','DarkGray'))
-  foreach($s in (HistSegs ($d.hist.Substring([math]::Max(0,$d.hist.Length - $histW))))){ $hRow.Add($s) }
-  $hRow.Add(@(']','DarkGray'))
-  $rows.Add($hRow)
-  $lRow = New-Object System.Collections.Generic.List[object]
-  $lRow.Add(@('           ','DarkGray')); $lRow.Add(@('.','DarkGreen')); $lRow.Add(@(' ok   ','DarkGray'))
-  $lRow.Add(@('!','Yellow')); $lRow.Add(@(' degraded   ','DarkGray')); $lRow.Add(@('x','Red')); $lRow.Add(@(' down','DarkGray'))
-  $rows.Add($lRow)
   $rows.Add($blank)
-  $pRow = New-Object System.Collections.Generic.List[object]
-  $pRow.Add(@((' log  ' + $d.logPath),'DarkGray'))
-  $rows.Add($pRow)
+  foreach($r in (Banner-Rows $d.hostName)){ $rows.Add($r) }
+  $rows.Add($blank)
 
-  foreach($r in $rows){ Write-SegRow $r $w }
-  # clear leftover lines from a previous, taller frame
-  if($script:lastRows -gt $rows.Count){ for($i=$rows.Count;$i -lt $script:lastRows;$i++){ Write-Host (' ' * $w) } }
+  $stTok = 'ok'
+  if ($d.state -eq 'DOWN') { $stTok = 'bad' } elseif ($d.state -ne 'ok') { $stTok = 'warn' }
+  $sigTok = 'ok'
+  if ($null -ne $d.sigVal) { if ($d.sigVal -lt 40) { $sigTok='bad' } elseif ($d.sigVal -lt 60) { $sigTok='warn' } }
+
+  $rows.Add((P-Top ($d.hostName + '  monitor') $w))
+  $rows.Add((P-Row 'run' (Dotted @(
+      ('every ' + $d.interval + 's'), 'dim',
+      ('up ' + $d.elapsed), 'dim',
+      ([string]$d.n + ' samples'), 'dim'
+    )) $w))
+  $rows.Add((P-Rule $w))
+
+  $rows.Add((P-Row 'status' (One $d.state $stTok) $w))
+  $rows.Add((P-Row 'now' (Dotted @(
+      ('ping ' + $d.ping), 'fg',
+      ('loss ' + $d.loss), $(if($d.lossVal -gt 0){'warn'}else{'dim'}),
+      ('jitter ' + $d.jit), $(if($d.jitVal -ge 30){'warn'}else{'dim'}),
+      ('dns ' + $d.dns), $(if($d.dns -eq 'FAIL'){'bad'}else{'dim'})
+    )) $w))
+  $rows.Add((P-Rule $w))
+
+  if($d.wifi){
+    $rows.Add((P-Row 'link' (Dotted @(
+        $d.ssid, 'fg',
+        $d.band, 'dim',
+        $d.sig,  $sigTok,
+        $d.rate, 'dim'
+      )) $w))
+    $rows.Add((P-Row 'ap' (One $d.ap 'dim') $w))
+  } else {
+    $rows.Add((P-Row 'link' (One $d.link 'fg') $w))
+    $rows.Add((P-Row 'ap' (One '-' 'muted') $w))
+  }
+  if($d.sites -and $d.sites -ne '-'){
+    $rows.Add((P-Row 'sites' (One $d.sites 'dim') $w))
+  }
+  $rows.Add((P-Rule $w))
+
+  $rows.Add((P-Row 'session' (Dotted @(
+      ($d.outages + ' out'),        $(if($d.outagesN -gt 0){'warn'}else{'dim'}),
+      ($d.jitN + ' jit'),           $(if([int]$d.jitN -gt 0){'warn'}else{'dim'}),
+      ($d.lossN + ' loss'),         $(if([int]$d.lossN -gt 0){'warn'}else{'dim'}),
+      ([string]$d.roams + ' roams'),$(if([int]$d.roams -gt 0){'warn'}else{'dim'}),
+      ([string]$d.aps + ' aps'),    'dim',
+      ($d.dnsN + ' dns'),           $(if([int]$d.dnsN -gt 0){'warn'}else{'dim'})
+    )) $w))
+  $histW = [math]::Max(20, $w - 18)
+  $rows.Add((P-Row 'history' (Hist-Segs ($d.hist.Substring([math]::Max(0,$d.hist.Length - $histW)))) $w))
+  $rows.Add((P-Rule $w))
+
+  $pulseW = [math]::Max(12, [math]::Min(30, $w - 34))
+  $pseg = New-Object System.Collections.Generic.List[object]
+  foreach($s in (Pulse $pulseW $prog)){ $pseg.Add($s) }
+  $left = [math]::Max(0, [int][math]::Ceiling($d.interval * (1.0 - $prog)))
+  $pseg.Add(@(('   next sample in ' + $left + 's'),'muted'))
+  $rows.Add((P-Row 'pulse' $pseg $w))
+  $rows.Add((P-Rule $w))
+
+  $evs = @($d.events)
+  for($i=0;$i -lt 3;$i++){
+    $lbl = $(if($i -eq 0){'events'}else{''})
+    if($evs.Count -eq 0 -and $i -eq 0) { $rows.Add((P-Row $lbl (One 'nothing yet' 'muted') $w)) }
+    elseif($i -lt $evs.Count) { $rows.Add((P-Row $lbl (One ([string]$evs[$i]) 'warn') $w)) }
+    else { $rows.Add((P-Row $lbl (One ' ' 'muted') $w)) }
+  }
+  $rows.Add((P-Rule $w))
+  $rows.Add((P-Row 'log' (One $d.logPath 'muted') $w))
+  $rows.Add((P-Bot $w))
+
+  $rows.Add($blank)
+  $qr = New-Object System.Collections.Generic.List[object]
+  $qr.Add(@('  [Q] ','accentHi')); $qr.Add(@('stop and build the report','muted'))
+  $rows.Add($qr)
+
+  foreach($r in $rows){ Emit-Row $r $w }
+  if($script:lastRows -gt $rows.Count){ for($i=$rows.Count;$i -lt $script:lastRows;$i++){ Emit-Row $blank $w } }
   $script:lastRows = $rows.Count
+}
+
+# Called from the wait loop between samples: same frame, one tick further on,
+# so the sweep and the pulse keep moving while nothing is being measured.
+function Step-Dash([double]$prog){
+  if ($null -eq $script:lastD) { return }
+  $script:frame++
+  Draw-Dash $script:lastD $prog
 }
 # --- end dashboard rendering ---
 
@@ -842,7 +989,9 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
       $tickStart.ToString('HH:mm:ss'), $state.PadRight(4), $tick.'1.1.1.1', $loss, $jit, $tick.dns, $w.sig, $(if($w.band){$w.band}else{''}))
   }
 
-  # wait for next tick, polling for Q
+  # wait for next tick, polling for Q. Redrawing here is what keeps the sweep
+  # and the pulse moving - without it the panel would sit frozen for the whole
+  # interval and read as hung.
   $deadline = $tickStart.AddSeconds($IntervalSec)
   while ((Get-Date) -lt $deadline) {
     if ($interactive) {
@@ -852,6 +1001,10 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
           if ($key.Key -eq 'Q') { $stopReq = $true; break }
         }
       } catch {}
+      $elapsedTick = ((Get-Date) - $tickStart).TotalSeconds
+      $prog = 0.0
+      if ($IntervalSec -gt 0) { $prog = [math]::Min(1.0, [math]::Max(0.0, $elapsedTick / $IntervalSec)) }
+      try { Step-Dash $prog } catch {}
     }
     Start-Sleep -Milliseconds 150
   }
