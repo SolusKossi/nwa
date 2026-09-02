@@ -1,11 +1,13 @@
-# nwa
+# NWA
 
 Network diagnostics for Windows. One script: run it, watch the live status in
 the terminal, press Q - it builds and opens an HTML report that explains, in
 plain language, what is wrong. Analysis stays local; snapshot public-IP lookup
 is opt-in.
 
+## Mid-run monitoring: 
 <img width="1083" height="543" alt="image" src="https://github.com/user-attachments/assets/d29b7077-52c8-4137-b6c4-87d1f7d97551" />
+## Post-run report: 
 <img width="825" height="1211" alt="image" src="https://github.com/user-attachments/assets/1128e2ee-9bee-4be0-bfd3-73456d9c5a63" />
 
 ## Use
