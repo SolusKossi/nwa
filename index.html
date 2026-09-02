@@ -508,6 +508,9 @@ function fmtTime(s){ try{ const d=new Date(s);
   catch{ return s||''; } }
 function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch{ return String(u); } }
 const HTTP_SLOW=1500;
+// Same physical AP, different radio: BSSIDs share the tail and vary in the
+// leading octets. Used to tell a band change on one AP from a real roam.
+function apKey(b){ const p=String(b||'').toLowerCase().split(':'); return p.length===6?p.slice(3).join(':'):String(b||''); }
 
 /* ---------- DNS advice (shared) ---------- */
 const PUBLIC_DNS=/^(1\.1\.1\.1|1\.0\.0\.1|8\.8\.8\.8|8\.8\.4\.4|9\.9\.9\.9|149\.112\.112\.112|208\.67\.222\.222|208\.67\.220\.220)$/;
@@ -708,12 +711,27 @@ function analyzeMonitor(meta, ticks){
   const gwAvg=(()=>{ const v=rows.filter(r=>r.gwReach).map(r=>r.gw); return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null; })();
 
   // Wi-Fi roaming (ALL roam times, uncapped) + band switches
+  //
+  // One access point answers on a different BSSID per radio, so a client moving
+  // between 2.4 and 5 GHz on the SAME AP changes BSSID and used to be counted as
+  // a roam. That is misleading: a real roam stalls traffic for 1-3s, a band
+  // change on one AP usually does not.
+  //
+  // The last three octets identify the unit and the leading octets carry the
+  // radio bits (b8:b4:c9:1f:f6:c0 and ba:b4:d9:1f:f6:c0 are one AP), so group on
+  // the tail. Vendors that instead vary the last octet per SSID will not group,
+  // which just leaves the old over-reporting behaviour rather than inventing a
+  // merge between two APs that genuinely differ only in that octet.
   const bssidRows=rows.filter(r=>r.bssid);
-  let roams=0; const roamTimes=[]; const roamPairs=[];
+  let roams=0; const roamTimes=[]; const roamPairs=[]; const radioSwitches=[];
   for(let i=1;i<bssidRows.length;i++){
-    if(bssidRows[i].bssid!==bssidRows[i-1].bssid){
-      roams++; roamTimes.push(bssidRows[i].t);
-      roamPairs.push({t:bssidRows[i].t,tms:bssidRows[i].tms,from:bssidRows[i-1].bssid,to:bssidRows[i].bssid});
+    const prev=bssidRows[i-1], cur=bssidRows[i];
+    if(cur.bssid===prev.bssid) continue;
+    if(apKey(cur.bssid)===apKey(prev.bssid)){
+      radioSwitches.push({t:cur.t,tms:cur.tms,from:prev.bssid,to:cur.bssid});
+    } else {
+      roams++; roamTimes.push(cur.t);
+      roamPairs.push({t:cur.t,tms:cur.tms,from:prev.bssid,to:cur.bssid});
     }
   }
   const bandSwitches=[];
@@ -721,7 +739,8 @@ function analyzeMonitor(meta, ticks){
   for(let i=1;i<bandRows.length;i++){
     if(bandRows[i].band!==bandRows[i-1].band) bandSwitches.push({t:bandRows[i].t,tms:bandRows[i].tms,from:bandRows[i-1].band,to:bandRows[i].band});
   }
-  const aps=[...new Set(bssidRows.map(r=>r.bssid))];
+  const bssids=[...new Set(bssidRows.map(r=>r.bssid))];
+  const aps=[...new Set(bssidRows.map(r=>apKey(r.bssid)))];
   const bands=[...new Set(rows.map(r=>r.band).filter(Boolean))];
   const on5=bands.some(b=>/5\s*g/i.test(b)), on24=bands.some(b=>/2\.4/i.test(b));
   const rates=rows.map(r=>r.rx).filter(v=>v!=null);
@@ -737,9 +756,20 @@ function analyzeMonitor(meta, ticks){
 
   // congestion / adapter / ipv6
   const nbrScans = ticks.filter(t=>t && t.nbr && typeof t.nbr.coChan==='number');
-  const coChanOthers = nbrScans.length ? Math.max(0, Math.max(...nbrScans.map(t=>t.nbr.coChan))-1) : null;
-  const nbrTotalMax = nbrScans.length ? Math.max(...nbrScans.map(t=>t.nbr.total)) : null;
-  const congChan = nbrScans.length ? nbrScans[nbrScans.length-1].nbr.chan : null;
+  // Windows rate-limits the neighbour scan, so most ticks come back listing only
+  // the AP we are joined to. A total of 1 is a scan that did not run, not quiet
+  // air, and averaging those in drags the count to nothing. Drop them.
+  //
+  // What remains is a lower bound: a scan can miss an AP but never invent one,
+  // so the best reading is the closest to the truth. It is still only a lower
+  // bound - two machines on one desk, same channel, same hour, reported 42 and
+  // 58 APs - so this can flag a crowded channel but never on its own decide
+  // that a network is bad.
+  const realScans = nbrScans.filter(t=>t.nbr.total>1);
+  const coChanOthers = realScans.length ? Math.max(...realScans.map(t=>Math.max(0,t.nbr.coChan-1))) : null;
+  const nbrTotalMed = realScans.length ? Math.max(...realScans.map(t=>t.nbr.total)) : null;
+  const nbrScanN = realScans.length;
+  const congChan = realScans.length ? realScans[realScans.length-1].nbr.chan : (nbrScans.length ? nbrScans[nbrScans.length-1].nbr.chan : null);
   const adapter = meta.adapter || null;
   const ipv6 = meta.ipv6 || null;
   const pmSuspend = !!(adapter && adapter.powerMgmt && /enabled/i.test(adapter.powerMgmt.selectiveSuspend||''));
@@ -898,9 +928,16 @@ function analyzeMonitor(meta, ticks){
   if(roams){
     P((roams>=6 && roams/activeDays>=24)?'bad':'warn', `Roamed between access points ${roams}x${aps.length>1?` (${aps.length} APs seen)`:''}`,
       `The Wi-Fi kept handing off between access points during the session. Each handoff can stall traffic for 1-3s - a classic source of "Teams froze for a second" and random timeouts.`+
+      (radioSwitches.length?` A further ${radioSwitches.length} BSSID change${radioSwitches.length>1?'s were':' was'} between radios on one access point, which is much cheaper and is not counted here.`:'')+
       (roamHitPct!=null&&roamHitPct>=40?` ${roamHitPct}% of the roams had loss or jitter within a minute.`:''),
       'If roams line up with the loss/drops above, this seat is in a handoff zone. Ethernet avoids it entirely; otherwise AP placement or roaming/min-RSSI tuning on the controller is the fix.',
       roamTimes);
+  }
+  if(!roams && radioSwitches.length>=3){
+    P('warn', `Switched radio ${radioSwitches.length}x on the same access point`,
+      `The client moved between the 2.4 and 5 GHz radios of one access point rather than roaming to a different one. That is far cheaper than a real handoff, but repeated flapping still interrupts calls.`,
+      'Usually band steering or a marginal 5 GHz signal at this spot. Worth a look only if it lines up with the loss or jitter above.',
+      radioSwitches.map(r=>r.t));
   }
   if(onWifi && on5 && !on24 && minSig!=null && minSig<55){
     P('warn', `On 5 GHz with a weakish signal (low ${minSig}%)`,
@@ -921,8 +958,9 @@ function analyzeMonitor(meta, ticks){
       lowRateRows.map(r=>r.t));
   }
   if(coChanOthers!=null && coChanOthers>=3){
-    P(coChanOthers>=6?'bad':'warn', `Crowded Wi-Fi channel (${coChanOthers} other networks on channel ${congChan})`,
-      `Your channel is shared with ${coChanOthers} other access point${coChanOthers>1?'s':''}. They all take turns on the air, which adds latency and jitter even when your signal is strong - common on 2.4 GHz.`,
+    P('warn', `Crowded Wi-Fi channel (${coChanOthers} other networks on channel ${congChan})`,
+      `Your channel is shared with ${coChanOthers} other access point${coChanOthers>1?'s':''}. They all take turns on the air, which adds latency and jitter even when your signal is strong - common on 2.4 GHz.`+
+      ` Counted from ${nbrScanN} usable scan${nbrScanN===1?'':'s'} out of ${nbrScans.length}, and a scan only ever misses APs - so treat it as a floor rather than an exact figure.`,
       'Switch this AP to a quieter channel (1/6/11 on 2.4 GHz), prefer 5 GHz, or reduce the number of APs on the same channel.');
   }
   if(pmSuspend){
@@ -999,15 +1037,15 @@ function analyzeMonitor(meta, ticks){
   if(activeSec>=8*3600) checks.push({label:'Office hours', status:thinOffice?'warn':'ok', value:Math.round(officePct)+'%'});
   if(wlanDiscs.length) checks.push({label:'Disconnects', status:findLvl('Wi-Fi disconnect')||'warn', value:String(wlanDiscs.length)});
   if(ethRows.length) checks.push({label:'Wired link', status:ethDowngraded?(ethMin<=100?'bad':'warn'):'ok', value:(ethMin!=null?(ethDowngraded?ethMin+' Mbps!':ethMax+' Mbps'):'--')});
-  if(coChanOthers!=null) checks.push({label:'Ch. neighbours', status:coChanOthers>=6?'bad':coChanOthers>=3?'warn':'ok', value:String(coChanOthers)});
+  if(coChanOthers!=null) checks.push({label:'Ch. neighbours', status:coChanOthers>=3?'warn':'ok', value:String(coChanOthers)});
   if(ipv6 && ipv6.reachable) checks.push({label:'IPv6', status:'ok', value: ipv6.ms!=null?ipv6.ms+' ms':'yes'});
 
   const a = {rows,outages,interval,targets,httpSeries,verdict,checks,problems,
     uptimePct,totalDownSec,avgLat,p95,spikes,dnsFails,dnsFailsUp,dnsFailsDown,dnsAvg,minSig,maxSig,onWifi,startT,endT,t0,t1,spanSec,N,
     hasQ,lossTicks,avgLoss,maxLoss,avgJit,maxJit,jitHigh,icmpOnlyN:icmpOnlyRows.length,
-    gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamTimes,roamPairs,bandSwitches,aps,bands,on5,on24,minRate,lowRate,
+    gwUsable,gwReachPct,gwAvg,gwDropWhileUp,roams,roamTimes,roamPairs,bandSwitches,radioSwitches,aps,bssids,bands,on5,on24,minRate,lowRate,
     radio:(rows.find(r=>r.radio)||{}).radio,
-    coChanOthers,nbrTotalMax,congChan,adapter,ipv6,pmSuspend,
+    coChanOthers,nbrTotalMed,nbrScanN,congChan,adapter,ipv6,pmSuspend,
     activeSec,noDataSec,activeDays,officeSec,officePct,thinOffice,office:ow,gapList,wlanDiscs,topReasons,ethRows,ethShifts,ethMax,ethMin,ethDowngraded,
     bandStats,apStats,roamCorrPct,roamHitPct,hourGrid,dayList,chartEvents,
     bssidHidden:!!meta.bssidHidden};
@@ -1073,7 +1111,7 @@ const C = {
 const RUNCOLORS = [C.acc, C.warn, C.ok, CSSV('--run3','#a98fd0')];
 function chartTheme(){ return {bg:C.panel, grid:C.line, text:C.muted, gap:'rgba(109,113,133,.26)'}; }
 const APCOLORS=[C.acc, C.accHi, C.ok, C.warn, CSSV('--run3','#a98fd0'), '#c79ad8'];
-function apColor(a,bssid){ const i=a.aps.indexOf(bssid); return APCOLORS[(i<0?0:i)%APCOLORS.length]; }
+function apColor(a,bssid){ const i=a.aps.indexOf(apKey(bssid)); return APCOLORS[(i<0?0:i)%APCOLORS.length]; }
 function bandColor(b){ return /2\.4/.test(b||'') ? C.warn : C.acc; }
 function rleSegs(rows,key,colorFn,tEnd){
   const segs=[]; let cur=null;
@@ -1454,7 +1492,7 @@ function monitorHtml(run){
         s.jitHi?`<span style="color:var(--amber)">${s.jitHi}</span>`:'0', s.loss?`<span style="color:var(--amber)">${s.loss}</span>`:'0', s.avgRate!=null?s.avgRate+' Mbps':'--'];});
     html+=sec('WI-FI LINK', a.bands.join(' / ')||'wireless',
       `<p class="line">Signal <b>${a.minSig}-${a.maxSig}%</b>${a.radio?` - <b>${esc(a.radio)}</b>`:''} - roams <b style="color:${a.roams?'var(--amber)':'var(--p)'}">${a.roams}</b>${a.roamCorrPct!=null?` - <b>${a.roamCorrPct}%</b> of degraded moments within 60s of a roam`:''}</p>
-       ${a.coChanOthers!=null?`<p class="line">Channel congestion: <b style="color:${a.coChanOthers>=3?'var(--amber)':'var(--p)'}">${a.coChanOthers}</b> other network${a.coChanOthers===1?'':'s'} on channel ${a.congChan}${a.nbrTotalMax!=null?` - ${a.nbrTotalMax} APs nearby in total`:''}</p>`:''}
+       ${a.coChanOthers!=null?`<p class="line">Channel congestion: <b style="color:${a.coChanOthers>=3?'var(--amber)':'var(--p)'}">${a.coChanOthers}</b> other network${a.coChanOthers===1?'':'s'} on channel ${a.congChan}${a.nbrTotalMed!=null?` - ${a.nbrTotalMed} APs nearby (median)`:''}</p>`:''}
        ${a.adapter?`<p class="line dim">Adapter: ${esc(a.adapter.description||a.adapter.name||'?')}${a.adapter.driverVersion?` - driver ${esc(a.adapter.driverVersion)}`:''}${a.adapter.driverDate?` (${esc(a.adapter.driverDate)})`:''}${a.pmSuspend?` - <span style="color:var(--amber)">power saving on</span>`:''}</p>`:''}
        ${a.bssidHidden?`<p class="line dim">Windows hid the AP identity during this run (Location off) - roam detection was limited.</p>`:''}
        ${apRows.length?`<p class="line dim" style="margin-top:12px">Per access point</p>`+table(['AP','Time share','Avg sig','Min sig','Bands','Roams','Bad ticks'],apRows):''}
