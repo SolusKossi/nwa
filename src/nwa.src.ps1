@@ -578,20 +578,27 @@ function TokCon($tok){
 }
 function SegLen($row){ $n=0; foreach($s in $row){ $n += ([string]$s[0]).Length }; return $n }
 
-function Emit-Row($row,[int]$w){
+# Every row is written at an absolute cursor position with no trailing newline.
+# Letting lines flow naturally scrolls the buffer the moment the panel is as
+# tall as the window, and the next frame then draws into a shifted view - which
+# is what made the whole screen jump.
+function Emit-Row($row,[int]$w,[int]$line){
+  $wh = 200; try { $wh = [Console]::WindowHeight } catch {}
+  if ($line -ge $wh) { return }
   if ($script:Fancy) {
     $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append($E + '[' + ($line + 1) + ';1H')
     foreach($s in $row){ [void]$sb.Append((TokAnsi $s[1])); [void]$sb.Append([string]$s[0]) }
     [void]$sb.Append($script:RST); [void]$sb.Append($script:EL)
-    [Console]::WriteLine($sb.ToString())
+    [Console]::Write($sb.ToString())
   } else {
+    try { [Console]::SetCursorPosition(0, $line) } catch { return }
     $len = 0
     foreach($s in $row){
       Write-Host ([string]$s[0]) -NoNewline -ForegroundColor (TokCon $s[1])
       $len += ([string]$s[0]).Length
     }
     if($len -lt $w){ Write-Host (' ' * ($w - $len)) -NoNewline }
-    Write-Host ''
   }
 }
 
@@ -622,7 +629,7 @@ $script:NwaTag = 'network analysis'
 function Banner-Rows([string]$hostName){
   $lw = 0; foreach($l in $script:NwaLogo){ if($l.Length -gt $lw){ $lw = $l.Length } }
   $span = $lw + 18
-  $head = ($script:frame * 2) % $span
+  $head = ($script:frame * 3) % $span
   $out = New-Object System.Collections.Generic.List[object]
   for($i=0; $i -lt $script:NwaLogo.Count; $i++){
     $line = $script:NwaLogo[$i]
@@ -761,10 +768,13 @@ $script:lastD = $null
 function Draw-Dash($d, [double]$prog = 0.0){
   $script:lastD = $d
   $w = DashW
-  try {
-    if (-not $script:dashDrawn) { try { Clear-Host } catch {}; $script:dashDrawn = $true }
-    [Console]::SetCursorPosition(0,0)
-  } catch { $script:dashDrawn = $true }
+  if (-not $script:dashDrawn) {
+    try { Clear-Host } catch {}
+    # A caret hopping around the panel every frame reads as flicker in its own
+    # right. Restored in the wrap-up.
+    if ($script:Fancy) { try { [Console]::Write($E + '[?25l') } catch {} }
+    $script:dashDrawn = $true
+  }
 
   $rows = New-Object System.Collections.Generic.List[object]
   $blank = New-Object System.Collections.Generic.List[object]; $blank.Add(@(' ','muted'))
@@ -848,9 +858,14 @@ function Draw-Dash($d, [double]$prog = 0.0){
   $qr.Add(@('  [Q] ','accentHi')); $qr.Add(@('stop and build the report','muted'))
   $rows.Add($qr)
 
-  foreach($r in $rows){ Emit-Row $r $w }
-  if($script:lastRows -gt $rows.Count){ for($i=$rows.Count;$i -lt $script:lastRows;$i++){ Emit-Row $blank $w } }
+  for($i=0; $i -lt $rows.Count; $i++){ Emit-Row $rows[$i] $w $i }
+  if($script:lastRows -gt $rows.Count){
+    for($i=$rows.Count; $i -lt $script:lastRows; $i++){ Emit-Row $blank $w $i }
+  }
   $script:lastRows = $rows.Count
+  # Park the cursor below the panel rather than leaving it mid-frame, so a
+  # stray keystroke or a Ctrl+C message does not land inside the drawing.
+  try { [Console]::SetCursorPosition(0, [math]::Min($rows.Count, [Console]::WindowHeight - 1)) } catch {}
 }
 
 # Called from the wait loop between samples: same frame, one tick further on,
@@ -1006,11 +1021,12 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
       if ($IntervalSec -gt 0) { $prog = [math]::Min(1.0, [math]::Max(0.0, $elapsedTick / $IntervalSec)) }
       try { Step-Dash $prog } catch {}
     }
-    Start-Sleep -Milliseconds 150
+    Start-Sleep -Milliseconds 70
   }
 }
 
 # ---------- wrap up ----------
+if ($script:Fancy -and $script:dashDrawn) { try { [Console]::Write([char]27 + '[?25h') } catch {} }
 Write-Host ''
 Write-Host ('Stopped. ' + $k + ' samples over ' + (Format-Elapsed ((Get-Date) - $startT)) + '.') -ForegroundColor Green
 Write-Host ('Log: ' + $out) -ForegroundColor Green
