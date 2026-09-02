@@ -1,4 +1,5 @@
 # nwa
+<img width="1083" height="543" alt="image" src="https://github.com/user-attachments/assets/d29b7077-52c8-4137-b6c4-87d1f7d97551" />
 
 Network diagnostics for Windows. One script: run it, watch the live status in
 the terminal, press Q - it builds and opens an HTML report that explains, in
