@@ -18,6 +18,8 @@
 param(
   [switch]$Snapshot,                 # one-shot health check instead of monitoring
   [string[]]$Sites = @(),            # extra sites to test, e.g. -Sites "yourapp.com","intranet.local"
+  [switch]$NoDefaultSites,           # skip the built-in Microsoft 365 reachability checks
+  [int]$SiteCheckSec = 60,           # how often to test sites (they are far slower than a ping)
   [int]$IntervalSec = 10,            # seconds between checks
   [double]$DurationHours = 0,        # 0 = run until Q / Ctrl+C
   [int]$PingCount = 5,               # pings per target per check (loss / jitter)
@@ -62,7 +64,16 @@ $script:logLines = New-Object System.Collections.Generic.List[string]
 
 $targets = @('1.1.1.1','8.8.8.8')
 $dnsHost = 'google.com'
-$httpTargets = @(foreach ($s in $Sites) { $s = $s.Trim(); if ($s) { if ($s -match '^https?://') { $s } else { 'https://' + $s } } })
+# Every complaint that started this tool was about Teams, yet ping, DNS and
+# ICMP all measure something else. These three are what "the office feels slow"
+# actually means in a Microsoft 365 shop: sign-in gates everything, and the other
+# two are the services people notice. HEAD requests only - nothing is uploaded.
+$defaultSites = @('login.microsoftonline.com','teams.microsoft.com','outlook.office365.com')
+$siteList = @()
+if (-not $NoDefaultSites) { $siteList += $defaultSites }
+$siteList += $Sites
+$httpTargets = @(foreach ($s in $siteList) { $s = [string]$s; $s = $s.Trim(); if ($s) { if ($s -match '^https?://') { $s } else { 'https://' + $s } } })
+$httpTargets = @($httpTargets | Select-Object -Unique)
 
 # ---------- helpers ----------
 
@@ -114,6 +125,7 @@ function Get-Congestion([int]$myChan){
 }
 
 # new Windows Wi-Fi events since last check (connect / fail / disconnect + reason)
+$script:lastSiteCheck = [datetime]::MinValue
 $script:wlanLogOk = $true
 $script:wlanSeen  = New-Object System.Collections.Generic.HashSet[long]
 function Get-WlanEvents([datetime]$since){
@@ -928,7 +940,15 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
   if ($wev.Count) { $tick.wlanEv = @($wev) }
 
   # sites (@() keeps a single result an array through ConvertTo-Json)
-  if ($httpTargets.Count) { $tick.http = @(Test-Sites $httpTargets) } else { $tick.http = @() }
+  # Only run site checks every $SiteCheckSec. On other ticks the key is omitted
+  # entirely, so the report can tell "not checked" from "checked and failed".
+  if ($httpTargets.Count) {
+    $sinceSite = ((Get-Date) - $script:lastSiteCheck).TotalSeconds
+    if ($script:lastSiteCheck -eq [datetime]::MinValue -or $sinceSite -ge $SiteCheckSec) {
+      $tick.http = @(Test-Sites $httpTargets)
+      $script:lastSiteCheck = Get-Date
+    }
+  } else { $tick.http = @() }
 
   # A full outage needs more evidence than ICMP alone: some networks block ping
   # while normal traffic keeps working. Only downgrade a ping failure when

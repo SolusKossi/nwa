@@ -740,12 +740,16 @@ function analyzeMonitor(meta, ticks){
 
   // per-service reachability
   const httpSeries = httpTargets.map(u=>{
+    // Site checks run on their own slower schedule, so most ticks carry no http
+    // entry at all. Those are "not checked", not "unreachable" - counting them as
+    // samples would report a perfectly healthy site as down most of the day.
     const samples = ticks.map((tk,i)=>{
-      const h = (Array.isArray(tk.http)?tk.http:[]).find(x=>x.u===u) || {};
+      if(!Array.isArray(tk.http) || !tk.http.length) return null;
+      const h = tk.http.find(x=>x.u===u) || {};
       const ms = typeof h.ms==='number'?h.ms:null;
       const ok = ms!=null && ms>=0;
       return { t:rows[i].t, ms:ok?ms:null, code:h.code||0, ok, internetUp:!rows[i].down };
-    });
+    }).filter(Boolean);
     const reach=samples.filter(s=>s.ok), fails=samples.filter(s=>!s.ok);
     const outs=[]; let c=null;
     samples.forEach(s=>{ if(!s.ok){ if(!c)c={start:s.t,count:0,upCount:0}; c.count++; if(s.internetUp)c.upCount++; c.end=s.t; }
