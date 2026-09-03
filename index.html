@@ -238,6 +238,42 @@ th{position:sticky;top:0;background:var(--panel-2);color:var(--muted);
 td{padding:7px 11px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap}
 tbody tr:last-child td{border-bottom:0}
 tbody tr:hover td{background:var(--panel-2);color:var(--text)}
+input[type=text],input:not([type]){
+  padding:7px 11px;background:var(--panel-2);color:var(--text);
+  border:1px solid var(--line);border-radius:var(--r-sm);
+  font-family:var(--mono);font-size:12.5px;min-width:210px}
+input::placeholder{color:var(--muted);font-family:var(--mono)}
+input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+
+/* A native select's popup is drawn by the OS and cannot be themed - option
+   colours are ignored and the list renders in the platform's own palette. The
+   select stays in the DOM for its value and is driven by this instead. */
+.sel{position:relative;display:inline-block}
+.sel select{position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none}
+.sel-trigger{display:flex;align-items:center;justify-content:space-between;gap:11px;
+  padding:7px 11px;background:var(--panel-2);color:var(--text);
+  border:1px solid var(--line);border-radius:var(--r-sm);
+  font-family:var(--mono);font-size:12.5px;cursor:pointer;text-align:left;white-space:nowrap}
+.sel-trigger:hover{border-color:var(--line-2)}
+.sel.open .sel-trigger,.sel-trigger:focus-visible{outline:none;border-color:var(--acc);
+  box-shadow:0 0 0 3px var(--acc-soft)}
+.sel-caret{width:6px;height:6px;flex:none;border-right:1.6px solid var(--dim);
+  border-bottom:1.6px solid var(--dim);transform:rotate(45deg) translate(-2px,-2px);
+  transition:transform .2s ease}
+.sel.open .sel-caret{transform:rotate(-135deg) translate(-2px,-2px)}
+.sel-list{position:absolute;z-index:40;left:0;top:calc(100% + 5px);min-width:100%;
+  margin:0;padding:4px;list-style:none;background:var(--panel-2);
+  border:1px solid var(--line-2);border-radius:var(--r-sm);
+  box-shadow:0 16px 40px rgba(0,0,0,.55);max-height:260px;overflow-y:auto;
+  opacity:0;transform:translateY(-5px) scale(.985);transform-origin:top;pointer-events:none;
+  transition:opacity .15s ease,transform .15s var(--ease)}
+.sel.open .sel-list{opacity:1;transform:none;pointer-events:auto}
+.sel-opt{padding:7px 10px;border-radius:var(--r-sm);cursor:pointer;
+  font-size:12.5px;color:var(--text);white-space:nowrap}
+.sel-opt.active{background:var(--panel-3)}
+.sel-opt[aria-selected="true"]{background:var(--acc);color:#0d0e13;font-weight:600}
+.sel-opt[aria-selected="true"].active{background:var(--acc-hi)}
+
 .empty{color:var(--muted);text-align:center;padding:26px 14px;font-size:13px;
   border:1px dashed var(--line);border-radius:var(--r-sm)}
 
@@ -253,14 +289,30 @@ tbody tr:hover td{background:var(--panel-2);color:var(--text)}
 .t-ok{background:var(--ok)}.t-warn{background:var(--warn)}
 .t-bad{background:var(--bad)}.t-gap{background:var(--line-2)}
 .chartwrap{position:relative;margin-bottom:11px}
-/* Scoped to canvas: .cv is also the stat tile's value, which must not pick up a
-   chart border. */
-canvas.cv{width:100%;display:block;border-radius:var(--r-sm);border:1px solid var(--line)}
-.ovl{position:absolute;inset:0;pointer-events:none}
+/* Chart canvases carry .base; .cv is the stat tile's value and must not pick up
+   a chart border. */
+canvas.base{width:100%;display:block;border-radius:var(--r-sm);border:1px solid var(--line)}
+/* A canvas is a replaced element: inset:0 alone does not stretch it, it falls
+   back to its intrinsic 2:1 ratio. Without these the overlay was 192px wide over
+   a 491px chart and the hover line landed at 39% of the cursor position. */
+.ovl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  border:1px solid transparent}
+/* Plain-language caption + verdict chip above each chart. */
+.chartcap{display:flex;align-items:baseline;gap:9px;margin:2px 0 5px}
+.chartcap .t{font-size:11.5px;color:var(--dim);font-family:var(--sans);line-height:1.45}
+.chartcap .t b{color:var(--text);font-family:var(--mono);font-size:11px;
+  text-transform:uppercase;letter-spacing:.09em;margin-right:6px}
+.cstat{flex:none;font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+  padding:2px 7px;border-radius:20px}
+.cstat.ok{background:var(--ok-bg);color:var(--ok)}
+.cstat.warn{background:var(--warn-bg);color:var(--warn)}
+.cstat.bad{background:var(--bad-bg);color:var(--bad)}
 .axis{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px}
 .readout{font-size:11.5px;color:var(--dim);min-height:1.3em;margin:3px 0 9px}
 .timeline{margin-bottom:5px}
-.tbar{display:flex;height:100%}
+.timeline .tbar{display:flex;height:100%}
+/* DATA toolbar */
+.tbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
 .tcol{flex:1 1 0;min-width:0}
 .st-up{background:var(--ok)}.st-down{background:var(--bad)}
 
@@ -510,6 +562,51 @@ function hostOf(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch
 const HTTP_SLOW=1500;
 // Same physical AP, different radio: BSSIDs share the tail and vary in the
 // leading octets. Used to tell a band change on one AP from a real roam.
+// Replaces a native select with a themed listbox. The select stays in the DOM
+// so its value and change event keep working; only the popup is ours.
+function enhanceSelect(sel){
+  if(!sel || sel.dataset.enhanced) return;
+  sel.dataset.enhanced='1';
+  const wrap=document.createElement('div'); wrap.className='sel';
+  sel.parentNode.insertBefore(wrap,sel); wrap.appendChild(sel);
+  const opts=[...sel.options].filter(o=>!o.hidden);
+  const trig=document.createElement('button');
+  trig.type='button'; trig.className='sel-trigger';
+  trig.innerHTML='<span class="lbl"></span><span class="sel-caret"></span>';
+  const list=document.createElement('ul'); list.className='sel-list'; list.setAttribute('role','listbox');
+  opts.forEach(o=>{
+    const li=document.createElement('li');
+    li.className='sel-opt'; li.textContent=o.textContent; li.dataset.value=o.value;
+    li.setAttribute('role','option');
+    li.onclick=e=>{ e.stopPropagation(); sel.value=o.value; sync(); close();
+      sel.dispatchEvent(new Event('change',{bubbles:true})); };
+    list.appendChild(li);
+  });
+  wrap.appendChild(trig); wrap.appendChild(list);
+  function sync(){
+    const cur=sel.options[sel.selectedIndex];
+    trig.querySelector('.lbl').textContent = cur ? cur.textContent : '';
+    [...list.children].forEach(li=>li.setAttribute('aria-selected', String(li.dataset.value===sel.value)));
+  }
+  function open(){ wrap.classList.add('open'); document.addEventListener('mousedown',away); }
+  function close(){ wrap.classList.remove('open'); document.removeEventListener('mousedown',away); }
+  function away(e){ if(!wrap.contains(e.target)) close(); }
+  trig.onclick=e=>{ e.stopPropagation(); wrap.classList.contains('open')?close():open(); };
+  trig.onkeydown=e=>{
+    if(e.key==='Escape') close();
+    else if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      const i=[...sel.options].indexOf(sel.options[sel.selectedIndex]);
+      const vis=opts, at=vis.findIndex(o=>o.value===sel.value);
+      const nx=Math.max(0,Math.min(vis.length-1, at+(e.key==='ArrowDown'?1:-1)));
+      sel.value=vis[nx].value; sync(); sel.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+  };
+  sel.addEventListener('change',sync);
+  sync();
+}
+function enhanceSelects(root){ (root||document).querySelectorAll('select:not([data-enhanced])').forEach(enhanceSelect); }
+
 function apKey(b){ const p=String(b||'').toLowerCase().split(':'); return p.length===6?p.slice(3).join(':'):String(b||''); }
 
 /* ---------- DNS advice (shared) ---------- */
@@ -1123,7 +1220,7 @@ function rleSegs(rows,key,colorFn,tEnd){
 const EVCOLOR = {roam:C.warn, band:C.acc, disc:C.bad};
 
 function setupCanvas(cv, hCss){
-  const w = Math.max(200, cv.parentElement.clientWidth || cv.clientWidth || 600);
+  const w = Math.max(200, cv.clientWidth || cv.parentElement.clientWidth || 600);
   const dpr = window.devicePixelRatio || 1;
   cv.width = Math.round(w*dpr); cv.height = Math.round(hCss*dpr);
   cv.style.height = hCss+'px';
@@ -1209,6 +1306,30 @@ function drawChart(cv, cfg){
   });
   // series: per-pixel bucket envelope + avg
   cfg.series.forEach(s=>{
+    // Bucketing by pixel only works while there are more samples than pixels.
+    // Zoom in and the samples become sparser than the buckets, every bucket ends
+    // up isolated, and the avg line's moveTo never gets a lineTo - so the whole
+    // series silently vanishes. Below that density, join the samples directly.
+    const seq=s.pts.filter(p=>p[0]>=t0&&p[0]<=t1);
+    if(seq.filter(p=>p[1]!=null).length < w){
+      ctx.strokeStyle=s.color; ctx.lineWidth=1.4; ctx.shadowColor=s.color; ctx.shadowBlur=5;
+      ctx.beginPath();
+      let pen=false;
+      seq.forEach(p=>{
+        if(p[1]==null){ pen=false; return; }
+        const x=px(p[0]), y=py(p[1]);
+        if(pen) ctx.lineTo(x,y); else { ctx.moveTo(x,y); pen=true; }
+      });
+      ctx.stroke(); ctx.shadowBlur=0;
+      // Zoomed far enough in that the samples are countable, mark each one -
+      // otherwise a handful of points reads as an almost empty chart.
+      const pts=seq.filter(p=>p[1]!=null);
+      if(pts.length && pts.length<=Math.max(2,w/8)){
+        ctx.fillStyle=s.color;
+        pts.forEach(p=>{ ctx.beginPath(); ctx.arc(px(p[0]),py(p[1]),1.9,0,7); ctx.fill(); });
+      }
+      return;
+    }
     const bmin=new Array(w).fill(null), bmax=new Array(w).fill(null), bsum=new Array(w).fill(0), bn=new Array(w).fill(0);
     s.pts.forEach(p=>{
       if(p[0]<t0||p[0]>t1) return;
@@ -1308,12 +1429,19 @@ function wireHover(run){
 }
 
 /* chart block HTML builder: registers draw jobs */
-function chartBlockHtml(run, series4){
+function chartBlockHtml(run, series4, caps){
   // series4: [{key:'lat',label,unit,thresholds,color?}, ...] built by caller
   let html='';
   series4.forEach((c,i)=>{
     const cid='ch-'+run.id+'-'+c.key;
-    html+=`<div class="chartwrap"><span class="chartlbl">${esc(c.label)}</span>
+    const cap=(caps||{})[c.key];
+    // A chart nobody can read is worse than no chart, so each one says what it
+    // measures and whether this run's answer is fine.
+    const head = cap
+      ? `<div class="chartcap"><span class="t"><b>${esc(c.label.split(' -')[0])}</b>${esc(cap.t)}</span>
+         <span class="cstat ${cap.st()}">${esc(cap.v())}</span></div>`
+      : `<span class="chartlbl">${esc(c.label)}</span>`;
+    html+=`<div class="chartwrap">${head}
       <canvas class="base" id="${cid}"></canvas><canvas class="ovl" id="ovl-${cid}"></canvas>
       ${i===series4.length-1?`<div class="axis" id="ax-${cid}"></div>`:''}</div>`;
   });
@@ -1323,6 +1451,27 @@ function chartBlockHtml(run, series4){
 function registerRunCharts(run){
   const a=run.a;
   const mk=(key,label,unit,ptsFn,extra)=>({key,label,unit,ptsFn,extra:extra||{}});
+  // What each chart is actually for, in words a non-network person can use, plus
+  // a verdict so you can tell at a glance whether this one is worth reading.
+  const CAP={
+    lat:{t:'How long a round trip to the internet takes. Under 50 ms is comfortable. Tall spikes are the pauses you feel mid-sentence on a call.',
+         st:()=>a.spikes? (a.spikes>=5?'bad':'warn') : 'ok',
+         v:()=>a.spikes? a.spikes+' spike'+(a.spikes>1?'s':'') : 'steady'},
+    jit:{t:'How much that round trip wobbles from one check to the next. This is what actually breaks calls - latency can be low and calls still stutter. Under 30 ms is fine.',
+         st:()=>a.jitHigh? (a.jitHigh>=5?'bad':'warn') : 'ok',
+         v:()=>a.jitHigh? a.jitHigh+' over 30 ms' : 'steady'},
+    sig:{t:'How strongly this PC hears the access point. Above 60% is comfortable, below 40% things start failing. The coloured bars underneath show which access point and which band it was on.',
+         st:()=>a.minSig==null?'ok':(a.minSig<25?'bad':a.minSig<40?'warn':'ok'),
+         v:()=>a.minSig==null?'--':('low '+a.minSig+'%')},
+    dns:{t:'How long it takes to turn a website name into an address. Under 100 ms is fine. A slow one makes pages hang before they start loading.',
+         st:()=>a.dnsFailsUp?'bad':(a.dnsAvg!=null&&a.dnsAvg>=300?'warn':'ok'),
+         v:()=>a.dnsFailsUp? a.dnsFailsUp+' failed' : (a.dnsAvg!=null?a.dnsAvg+' ms avg':'ok')},
+    rate:{t:'The speed the Wi-Fi card negotiated with the access point. It drops when the signal weakens, and also when the link is simply idle - so a dip here only matters if the charts above dip with it.',
+         st:()=>'ok', v:()=>a.minRate!=null?('low '+a.minRate+' Mbps'):'--'},
+    svc:{t:'How long your own sites took to answer, measured from this PC.',
+         st:()=>a.httpSeries.some(h=>h.fails)?'bad':(a.httpSeries.some(h=>h.slow)?'warn':'ok'),
+         v:()=>a.httpSeries.some(h=>h.fails)?'unreachable at times':'reachable'}
+  };
   const defs=[
     mk('lat','latency ms'+(a.gwUsable?' - internet (color) + gateway (grey)':'')+' - red dots = packet loss','ms',
       rows=>rows.map(r=>[r.tms,r.best]),
@@ -1367,8 +1516,8 @@ function registerRunCharts(run){
     }});
   });
   let legend='';
-  if(a.onWifi && a.aps.length) legend=`<div class="tleg" style="margin-top:8px">${a.aps.map(b=>`<i><b style="background:${apColor(a,b)}"></b>${esc(pv('bssid',b))}</i>`).join('')}<i><b style="background:#f59e0b"></b> 2.4 GHz</i><i><b style="background:#60a5fa"></b> 5 GHz</i></div>`;
-  return chartBlockHtml(run, defs)+legend;
+  if(a.onWifi && a.aps.length) legend=`<div class="tleg" style="margin-top:8px">${a.aps.map(b=>`<i><b style="background:${apColor(a,b)}"></b>${esc(pv('bssid',b))}</i>`).join('')}<i><b style="background:${bandColor('2.4')}"></b> 2.4 GHz</i><i><b style="background:${bandColor('5')}"></b> 5 GHz</i></div>`;
+  return chartBlockHtml(run, defs, CAP)+legend;
 }
 
 /* ---------- hour-of-day heatmap ---------- */
@@ -1788,7 +1937,7 @@ function renderAll(){
   const ab=$('#anonBtn'); if(ab){ ab.classList.toggle('on',ANON); ab.textContent=ANON?'De-anonymize':'Anonymize'; }
   const bb=$('#backBtn'); if(bb) bb.style.display = window.NWA_FROMEMBED ? 'none' : '';
   // draw + wire (setTimeout, not rAF - rAF stalls in background tabs)
-  setTimeout(()=>{ drawAllCharts(); mons.forEach(r=>{ wireHover(r); renderSamples(r); }); }, 0);
+  setTimeout(()=>{ enhanceSelects($('#out')); drawAllCharts(); mons.forEach(r=>{ wireHover(r); renderSamples(r); }); }, 0);
   window.scrollTo({top:0,behavior:'auto'});
 }
 let _rsz=null;

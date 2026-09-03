@@ -160,8 +160,15 @@ function Invoke-QuickTrace([string]$dest,[int]$maxHops){
 }
 
 # wired adapter link speed in Mbps (catches 1000 -> 100 renegotiation)
-function Get-EthMbps($upAdapters){
-  $e = $upAdapters | Where-Object { $_.PhysicalMediaType -notmatch '802.11|Wireless' } | Select-Object -First 1
+# Only the adapter actually carrying the default route counts as "wired". Taking
+# the first non-wireless adapter that happens to be Up reports Hyper-V switches,
+# WSL, VPN and dock adapters as a wired link - they sit at "Up" forever and
+# report 1 or 10 Gbps, so a laptop on Wi-Fi claimed a 10 Gbps cable.
+function Get-EthMbps($upAdapters, $routeIfIndex){
+  if ($null -eq $routeIfIndex) { return $null }
+  $e = $upAdapters | Where-Object {
+        $_.ifIndex -eq $routeIfIndex -and $_.PhysicalMediaType -notmatch '802.11|Wireless'
+      } | Select-Object -First 1
   if (-not $e) { return $null }
   if ($e.LinkSpeed -match '([\d\.]+)\s*(G|M)bps') {
     $v = [double]$matches[1]; if ($matches[2] -eq 'G') { $v = $v * 1000 }
@@ -912,7 +919,7 @@ while (-not $stopReq -and ($DurationHours -le 0 -or (Get-Date) -lt $end)) {
   $allAd = @(Get-NetAdapter -ErrorAction SilentlyContinue)
   $ups = @($allAd | Where-Object { $_.Status -eq 'Up' })
   $tick.up = $(if ($allAd.Count -eq 0) { $null } else { [bool]$ups.Count })
-  $eth = Get-EthMbps $ups
+  $eth = Get-EthMbps $ups $(if ($activeRoute) { $activeRoute.ifIndex } else { $null })
   if ($eth -ne $null) { $tick.eth = $eth }
 
   # Windows Wi-Fi events since last tick (disconnect reasons etc.)
