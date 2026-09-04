@@ -18,7 +18,7 @@
 param(
   [switch]$Snapshot,                 # one-shot health check instead of monitoring
   [string[]]$Sites = @(),            # extra sites to test, e.g. -Sites "yourapp.com","intranet.local"
-  [switch]$NoDefaultSites,           # skip the built-in Microsoft 365 reachability checks
+  [switch]$M365,                     # also test Microsoft 365 reachability (sign-in, Teams, Outlook)
   [int]$SiteCheckSec = 60,           # how often to test sites (they are far slower than a ping)
   [int]$IntervalSec = 10,            # seconds between checks
   [double]$DurationHours = 0,        # 0 = run until Q / Ctrl+C
@@ -64,13 +64,18 @@ $script:logLines = New-Object System.Collections.Generic.List[string]
 
 $targets = @('1.1.1.1','8.8.8.8')
 $dnsHost = 'google.com'
-# Every complaint that started this tool was about Teams, yet ping, DNS and
-# ICMP all measure something else. These three are what "the office feels slow"
-# actually means in a Microsoft 365 shop: sign-in gates everything, and the other
-# two are the services people notice. HEAD requests only - nothing is uploaded.
-$defaultSites = @('login.microsoftonline.com','teams.microsoft.com','outlook.office365.com')
+# Opt-in, not default: a general network tool should not start probing Microsoft
+# on someone else's machine unasked, and plenty of places do not use 365 at all.
+#
+# Worth knowing what these do and do not tell you. They measure the web front
+# door - reachable, and how far away. Teams *calls* run over UDP to a media relay
+# on entirely different endpoints, so a good number here is not proof that audio
+# is fine. What it is good for: sign-in gates every 365 service, so if that is
+# slow everything feels slow; and comparing the same endpoint from two machines
+# tells you whether a slow service is your network or just where it is hosted.
+$M365Sites = @('login.microsoftonline.com','teams.microsoft.com','outlook.office365.com')
 $siteList = @()
-if (-not $NoDefaultSites) { $siteList += $defaultSites }
+if ($M365) { $siteList += $M365Sites }
 $siteList += $Sites
 $httpTargets = @(foreach ($s in $siteList) { $s = [string]$s; $s = $s.Trim(); if ($s) { if ($s -match '^https?://') { $s } else { 'https://' + $s } } })
 $httpTargets = @($httpTargets | Select-Object -Unique)

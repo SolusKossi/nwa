@@ -27,7 +27,7 @@ Options:
 
     -Snapshot            one-shot health check (~15 s) instead of monitoring
     -Sites "a.com,b.no"  also test reachability to your own sites
-    -NoDefaultSites      skip the built-in Microsoft 365 checks
+    -M365                also test Microsoft 365 sign-in, Teams and Outlook
     -SiteCheckSec 60     how often to test sites
     -IntervalSec 10      seconds between checks
     -DurationHours 8     auto-stop (default: run until Q)
@@ -45,11 +45,11 @@ side) - try it with sample-monitor.jsonl.
 
 Every 10 s: ping bursts to the gateway and internet (loss, latency, jitter),
 DNS, Wi-Fi signal / band / access point / roaming, and Ethernet link speed.
-Every 60 s: reachability of login.microsoftonline.com, teams.microsoft.com and
-outlook.office365.com, plus any sites you add - because "the network is slow"
-usually means Teams or sign-in is slow, and a ping to 1.1.1.1 does not measure
-that. These are HEAD requests; nothing is uploaded. Turn them off with
--NoDefaultSites. Periodically: channel congestion (nearby APs). On failure:
+Every 60 s: any sites you asked for with -Sites, and with -M365 also
+login.microsoftonline.com, teams.microsoft.com and outlook.office365.com.
+Nothing is contacted unless you ask for it. These are HEAD requests, so they
+show whether a service answers and how quickly - not whether a Teams call
+sounds good, which runs over a media relay these do not touch. Periodically: channel congestion (nearby APs). On failure:
 a quick path trace. Plus Windows' own Wi-Fi disconnect log (the reason for
 each drop), adapter driver / power management, IPv6, and sleep-gap detection
 so hours where the laptop was asleep are not counted as "all fine".
